@@ -126,6 +126,7 @@ def buildArgs() -> list[str]:
 
     dataArgs = [
         '--include-data-files=app/assets/resources.rcc=app/assets/resources.rcc',
+        '--include-data-files=app/assets/completed_task.wav=app/assets/completed_task.wav',
     ]
 
     if sys.platform == "win32":

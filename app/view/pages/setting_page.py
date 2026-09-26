@@ -193,6 +193,11 @@ class SettingPage(ScrollArea):
                               self.tr("剪贴板监听器将自动检测剪贴板中的链接并添加下载任务"),
                               cfg.isClipboardListenerEnabled),
         )
+        softwareCards.append(
+            SwitchSettingCard(FluentIcon.RINGER, self.tr("下载完成提示音"),
+                              self.tr("任务下载完成时播放提示音"),
+                              cfg.shouldPlayCompletionSound),
+        )
         if not IS_ANDROID:
             softwareCards.append(self.migrateCard)
         self.softwareGroup.addSettingCards(softwareCards)

@@ -5,14 +5,6 @@
     <file>logo_macOS.png</file>
     <file>logo_menubar_template.png</file>
   </qresource>
-  <qresource prefix="res">
-<!--    <file>chrome_extension.crx</file>-->
-<!--    <file>firefox_extension.xpi</file>-->
-<!--    <file>install_chrome_extension_guidance.png</file>-->
-<!--    <file>install_chrome_extension_guidance.webp</file>-->
-<!--    <file>completed_task.wav</file>-->
-<!--    <file>received_info.wav</file>-->
-  </qresource>
 
   <qresource prefix="i18n">
     <file alias="gd3.zh_CN.qm">i18n/gd3.zh_CN.qm</file>

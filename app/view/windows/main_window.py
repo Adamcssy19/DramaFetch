@@ -569,6 +569,13 @@ class MainWindow(MSFluentWindow):
                 self.titleBar.minBtn.show()
                 self.titleBar.maxBtn.show()
 
+        # 背景色动画期间深色主题会先绘制浅色底（材质又是透明的，露出白底），
+        # 因此每次应用材质后立即把背景色归位：材质模式透明，无材质模式主题实色
+        self.backgroundColorAni.stop()
+        self.setBackgroundColor(
+            QColor(0, 0, 0, 0) if self.styleSheet() else self._normalBackgroundColor()
+        )
+
     def paintEvent(self, e):
         if self._macVisualEffectView is not None:
             painter = QPainter(self)

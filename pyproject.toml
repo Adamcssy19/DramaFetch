@@ -1,6 +1,6 @@
 [project]
 name = "dramafetch"
-version = "0.0.1"
+version = "0.0.2"
 description = "Windows short-drama downloader built on Ghost-Downloader-3."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -13,7 +13,6 @@ dependencies = [
     "pyside6~=6.10.3",
     "pyside6-fluent-widgets>=1.11.2",
     "qrcode[png]>=8.2",
-    "websockets>=14",
     "wreq>=0.12.0",
     "winloop>=0.6.0; sys_platform == 'win32'",
     "uvloop>=0.22.1; sys_platform != 'win32'",
@@ -28,7 +27,6 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-qt>=4.5.0",
-    "types-libtorrent>=2.0.11.20250816",
     "zstandard>=0.23.0",
 ]
 

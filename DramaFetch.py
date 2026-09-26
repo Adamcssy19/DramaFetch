@@ -99,6 +99,27 @@ def startApp(application, isSilent=False):
     cfg.isClipboardListenerEnabled.valueChanged.connect(application.clipboardListener.setEnabled)
     application.clipboardListener.setEnabled(cfg.isClipboardListenerEnabled.value)
 
+    # 下载完成提示音：随任务完成信号播放，可关
+    from pathlib import Path
+    from PySide6.QtCore import QUrl
+    from PySide6.QtMultimedia import QSoundEffect
+    completionSound = QSoundEffect(application)
+    for wav in (
+        EXECUTABLE_DIR / "app" / "assets" / "completed_task.wav",   # 打包后
+        Path(__file__).resolve().parent / "app" / "assets" / "completed_task.wav",  # 源码运行
+    ):
+        if wav.exists():
+            completionSound.setSource(QUrl.fromLocalFile(str(wav)))
+            break
+    completionSound.setVolume(0.8)
+    application.completionSound = completionSound
+
+    def onTaskCompleted(_task):
+        if cfg.shouldPlayCompletionSound.value:
+            completionSound.play()
+
+    taskService.taskCompleted.connect(onTaskCompleted)
+
     shouldRunOobe = not cfg.hasCompletedOobe.value and not isSilent
 
     if shouldRunOobe:

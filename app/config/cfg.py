@@ -286,6 +286,7 @@ class Config(QConfig):
     shouldCheckUpdateAtStartup = ConfigItem("Software", "CheckUpdateAtStartUp", True, BoolValidator())
     shouldRunAtLogin = ConfigItem("Software", "AutoRun", False, BoolValidator())
     isClipboardListenerEnabled = ConfigItem("Software", "ClipboardListener", True, BoolValidator())
+    shouldPlayCompletionSound = ConfigItem("Software", "CompletionSound", True, BoolValidator())
     geometry = ConfigItem(
         "Software", "Geometry", (0, 0, 0, 0), serializer=GeometrySerializer(),
     )
