@@ -116,6 +116,7 @@ class MainWindow(MSFluentWindow):
             self.titleBar.hBoxLayout.insertSpacing(0, 60)
 
         self.searchEdit.setClearButtonEnabled(True)
+        self.searchEdit.returnPressed.connect(self._onSearchReturn)
         self.searchEdit.hide()
         self.searchEdit.raise_()
 
@@ -162,7 +163,7 @@ class MainWindow(MSFluentWindow):
             onClick=lambda: self._showPage(pageClass), position=position,
         )
 
-    def _showPage(self, pageClass: type[QWidget]) -> None:
+    def _showPage(self, pageClass: type[QWidget]) -> QWidget:
         routeKey = pageClass.__name__
         page = self._pages.get(routeKey)
         if page is None:
@@ -177,6 +178,7 @@ class MainWindow(MSFluentWindow):
         self.switchTo(page)
         self.navigationInterface.setCurrentItem(routeKey)
         self._updateSearchTarget(page)
+        return page
 
     def _createPage(self, pageClass: type[QWidget]) -> QWidget:
         if pageClass is TaskPage:
@@ -196,6 +198,17 @@ class MainWindow(MSFluentWindow):
         page = self.stackedWidget.currentWidget()
         if hasattr(page, 'setSearchText'):
             page.setSearchText(text)
+
+    def _onSearchReturn(self) -> None:
+        """顶栏搜索框回车：支持关键词 / 剧名 / ID / 网址，交由短剧页处理。"""
+        text = self.searchEdit.text().strip()
+        if not text:
+            return
+        for PageClass in self._featureService.pages():
+            if hasattr(PageClass, 'searchShortDrama'):
+                page = self._showPage(PageClass)
+                page.searchShortDrama(text)
+                return
 
     def _updateSearchTarget(self, page: QWidget) -> None:
         self.searchEdit.clear()
