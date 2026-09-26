@@ -19,7 +19,7 @@ from app.config.constants import (
     AUTHOR, AUTHOR_URL, FEEDBACK_URL, VERSION, YEAR,
 )
 from app.view.components.setting_card_group import (
-    CollapsibleSettingCard, CollapsibleSettingCardGroup, QWIDGETSIZE_MAX,
+    CollapsibleSettingCard, CollapsibleSettingCardGroup,
 )
 from app.view.components.setting_cards import (
     PercentSpinBoxSettingCard, ProxySettingCard, SpinBoxSettingCard,
@@ -44,10 +44,6 @@ class SettingPage(ScrollArea):
         self.personalGroup = CollapsibleSettingCardGroup(self.tr("个性化"), "personalization", self.container)
         self.softwareGroup = CollapsibleSettingCardGroup(self.tr("应用"), "software", self.container)
         self.aboutGroup = CollapsibleSettingCardGroup(self.tr("关于"), "about", self.container)
-
-        from app.view.pages.task_page import EmptyStatusWidget
-        self.emptyStatusWidget = EmptyStatusWidget(FluentIcon.SEARCH_MIRROR, self.tr("未找到匹配的设置项"), self)
-        self.emptyStatusWidget.hide()
 
         self._initWidget()
         self._initCards()
@@ -308,76 +304,6 @@ class SettingPage(ScrollArea):
         from app.config.paths import APP_DATA_DIR
         from app.platform.desktop import revealInFolder
         revealInFolder(f"{APP_DATA_DIR}/DramaFetch.log")
-
-    @property
-    def searchPlaceholder(self) -> str:
-        return self.tr("搜索设置")
-
-    def setSearchText(self, text: str) -> None:
-        text = text.strip().lower()
-        if not text:
-            self._clearSearchFilter()
-            return
-
-        hasMatch = False
-        for i in range(self.vBoxLayout.count()):
-            group = self.vBoxLayout.itemAt(i).widget()
-            if not isinstance(group, CollapsibleSettingCardGroup):
-                continue
-            groupHasMatch = False
-            for j in range(group.cardLayout.count()):
-                card = group.cardLayout.itemAt(j).widget()
-                if card is None:
-                    continue
-                if self._isSearchMatch(card, text):
-                    card.show()
-                    groupHasMatch = True
-                else:
-                    card.hide()
-            if groupHasMatch:
-                group.show()
-                group.cardContainer.setMaximumHeight(QWIDGETSIZE_MAX)
-                hasMatch = True
-            else:
-                group.hide()
-
-        self.emptyStatusWidget.setVisible(not hasMatch)
-        if not hasMatch:
-            self.emptyStatusWidget.adjustSize()
-            self._refreshEmptyWidgetGeometry()
-
-    def _isSearchMatch(self, widget, text: str) -> bool:
-        if isinstance(widget, CollapsibleSettingCard):
-            widget = widget.card
-        title = widget.titleLabel.text().lower()
-        content = widget.contentLabel.text().lower()
-        return text in title or text in content
-
-    def _clearSearchFilter(self) -> None:
-        for i in range(self.vBoxLayout.count()):
-            group = self.vBoxLayout.itemAt(i).widget()
-            if not isinstance(group, CollapsibleSettingCardGroup):
-                continue
-            group.show()
-            for j in range(group.cardLayout.count()):
-                card = group.cardLayout.itemAt(j).widget()
-                if card is not None:
-                    card.show()
-            group.cardContainer.setMaximumHeight(
-                0 if group._collapsed else QWIDGETSIZE_MAX
-            )
-        self.emptyStatusWidget.hide()
-
-    def _refreshEmptyWidgetGeometry(self) -> None:
-        self.emptyStatusWidget.move(
-            (self.width() - self.emptyStatusWidget.width()) // 2,
-            (self.height() - self.emptyStatusWidget.height()) // 2,
-        )
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        if self.emptyStatusWidget.isVisible():
-            self._refreshEmptyWidgetGeometry()
 
     def showEvent(self, event) -> None:
         self._restoreOrder()

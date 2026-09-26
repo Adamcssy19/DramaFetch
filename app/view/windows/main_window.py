@@ -186,11 +186,6 @@ class MainWindow(MSFluentWindow):
             )
         return self._featureService.createPage(pageClass, parent=self)
 
-    def _onSearchTextChanged(self, text: str) -> None:
-        page = self.stackedWidget.currentWidget()
-        if hasattr(page, 'setSearchText'):
-            page.setSearchText(text)
-
     def _onSearchReturn(self) -> None:
         """顶栏搜索框回车：支持关键词 / 剧名 / ID / 网址，交由短剧页处理。"""
         text = self.searchEdit.text().strip()
@@ -204,11 +199,8 @@ class MainWindow(MSFluentWindow):
 
     def _updateSearchTarget(self, page: QWidget) -> None:
         self.searchEdit.clear()
-        if hasattr(page, 'searchPlaceholder'):
-            self.searchEdit.setPlaceholderText(page.searchPlaceholder)
-            self.searchEdit.show()
-        else:
-            self.searchEdit.hide()
+        self.searchEdit.setPlaceholderText(self.tr("搜索短剧：关键词 / 剧名 / ID / 网址"))
+        self.searchEdit.show()
 
     def _refreshSearchEditGeometry(self) -> None:
         tb = self.titleBar
@@ -230,7 +222,6 @@ class MainWindow(MSFluentWindow):
         QApplication.instance().styleHints().colorSchemeChanged.connect(self._onSystemColorSchemeChanged)
         self.titleBar.closeBtn.clicked.disconnect(self.close)
         self.titleBar.closeBtn.clicked.connect(self._onCloseClicked)
-        self.searchEdit.textChanged.connect(self._onSearchTextChanged)
 
         QShortcut(QKeySequence.StandardKey.Find, self).activated.connect(self._onSearchShortcut)
 

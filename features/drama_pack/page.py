@@ -133,7 +133,6 @@ class DramaCard(CardWidget):
 class DramaPage(PackPage, PageScrollArea):
     icon = FluentIcon.VIDEO
     title = N("PackPage", "短剧")
-    searchPlaceholder = "搜索短剧：关键词 / 剧名 / ID / 网址"
 
     def __init__(self, pack, parent=None):
         super().__init__(parent)
@@ -409,10 +408,6 @@ class DramaPage(PackPage, PageScrollArea):
         self._pack.submit(api.detail(seriesId), done=done, failed=failed, owner=self)
 
     # ── 主窗口顶栏搜索框接入 ──
-
-    def setSearchText(self, text: str):
-        """主窗口搜索框输入时同步文本（不触发搜索，回车才搜）。"""
-        self._searchBox.setText(text)
 
     def searchShortDrama(self, text: str):
         """主窗口搜索框回车：切到本页并执行搜索。"""

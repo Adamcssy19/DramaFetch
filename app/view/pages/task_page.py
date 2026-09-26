@@ -141,7 +141,6 @@ class TaskPage(QWidget):
         self._categoryFilter = ""
         self._sortField = SortField.CREATED_AT
         self._sortAscending = False
-        self._searchText = ""
         self._isSelectionMode = False
         self._selectionAnchor: str | None = None
         self._liveCards: dict[str, TaskCard] = {}
@@ -350,14 +349,6 @@ class TaskPage(QWidget):
 
     def setSortOrder(self, ascending: bool) -> None:
         self._sortAscending = ascending
-        self._refreshList()
-
-    @property
-    def searchPlaceholder(self) -> str:
-        return self.tr("搜索任务")
-
-    def setSearchText(self, text: str) -> None:
-        self._searchText = text
         self._refreshList()
 
     def startAll(self) -> None:
@@ -605,10 +596,6 @@ class TaskPage(QWidget):
         if self._categoryFilter:
             tasks = [t for t in tasks if t.category == self._categoryFilter]
 
-        if self._searchText:
-            lower = self._searchText.lower()
-            tasks = [t for t in tasks if lower in t.name.lower() or lower in t.url.lower()]
-
         if self._sortField == SortField.QUEUE_POSITION:
             waitingIndex = {tid: i for i, tid in enumerate(self._taskService.waitingOrder())}
             running, waiting, rest = [], [], []
@@ -656,10 +643,6 @@ class TaskPage(QWidget):
         else:
             if not self._taskService.tasks:
                 text = self.tr("暂无下载任务")
-            elif self._searchText and (self._filterMode != FilterMode.ALL or self._categoryFilter):
-                text = self.tr("没有匹配筛选条件的任务")
-            elif self._searchText:
-                text = self.tr("没有匹配的任务")
             elif self._categoryFilter:
                 text = self.tr("该分类下暂无任务")
             elif self._filterMode == FilterMode.ACTIVE:
