@@ -39,11 +39,15 @@ def write(path, text):
     path.write_text(text, encoding='utf-8', newline='\n')
 
 
-def replace_text(relative, old, new, required=True, note='', marker=None):
+def replace_text(relative, old, new, required=True, note='', marker=None, remove=False):
     """在 upstream/guoapp 下的某个文件里做定点替换。
 
     marker 用来保证幂等：marker 已经出现在文件里，就说明这条改动应用过，直接跳过。
     这一步很关键 —— 同步流程每天都会重新跑本脚本，不幂等就会把同一段内容重复插入。
+
+    remove=True 表示这是一条「删除」改动（new 为空）：找不到待删内容就说明已经删过了，
+    直接跳过而不是报错。
+
     required 为真时，找不到待替换内容会报错终止。
     """
     path = upstream / relative
@@ -54,6 +58,8 @@ def replace_text(relative, old, new, required=True, note='', marker=None):
     if marker and marker in text:
         return
     if old not in text:
+        if remove:
+            return
         message = f'{relative} 里找不到待替换内容（{note}）'
         (errors if required else warnings).append(message)
         return
@@ -305,6 +311,161 @@ def main():
         '\tentry := nativeDownloadFileName(job)\n',
         marker='entry := nativeDownloadFileName(job)',
         note='视频文件命名',
+    )
+
+    # ---- 首页与导航 ----
+
+    replace_text(
+        'lib/home_screen.dart',
+        "import 'local_store.dart';\n",
+        "import 'dramafetch_home.dart';\nimport 'local_store.dart';\n",
+        required=False,
+        marker="import 'dramafetch_home.dart';",
+        note='引入新首页',
+    )
+
+    # 桌面导航：第一项改成搜索，去掉追剧
+    replace_text(
+        'lib/home_screen.dart',
+        '                    destinations: [\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.explore_outlined),\n'
+        '                        selectedIcon: Icon(Icons.explore),\n'
+        "                        label: Text('发现'),\n"
+        '                      ),\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.bookmark_border_rounded),\n'
+        '                        selectedIcon: Icon(Icons.bookmark_rounded),\n'
+        "                        label: Text('追剧'),\n"
+        '                      ),\n',
+        '                    destinations: [\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.search_outlined),\n'
+        '                        selectedIcon: Icon(Icons.search),\n'
+        "                        label: Text('搜索'),\n"
+        '                      ),\n',
+        marker="label: Text('搜索'),",
+        note='导航去掉追剧',
+    )
+
+    # 首页内容换成搜索页；下载页索引随之前移
+    replace_text(
+        'lib/home_screen.dart',
+        '                  child: _tab == 0\n'
+        '                      ? widget.store.sources.isEmpty\n'
+        '                            ? const StatusPanel(\n'
+        "                                title: '暂无可用站源',\n"
+        "                                message: '请联系管理员为当前用户开放站源。',\n"
+        '                              )\n'
+        '                            : _catalog(selectionInBody: desktop || television)\n'
+        '                      : _tab == 3\n',
+        '                  child: _tab == 0\n'
+        '                      ? DramaFetchHome(\n'
+        '                          repository: widget.repository,\n'
+        '                          store: widget.store,\n'
+        '                          onOpen: _openDrama,\n'
+        '                        )\n'
+        '                      : _tab == 2\n',
+        marker='DramaFetchHome(',
+        note='首页换成搜索页',
+    )
+
+    replace_text(
+        'lib/home_screen.dart',
+        '                          history: _tab == 2,\n',
+        '                          history: true,\n',
+        marker='history: true,',
+        note='最近观看固定为历史',
+    )
+
+    # 删掉用户管理入口（本项目不做多用户）
+    replace_text(
+        'lib/settings_screen.dart',
+        '              ListTile(\n'
+        '                leading: const Icon(Icons.people_outline),\n'
+        "                title: const Text('用户管理'),\n"
+        "                subtitle: Text('当前：${widget.store.profile.name}'),\n"
+        '                onTap: () => Navigator.push(\n'
+        '                  context,\n'
+        '                  MaterialPageRoute<void>(\n'
+        '                    builder: (_) => ProfilesScreen(store: widget.store),\n'
+        '                  ),\n'
+        '                ),\n'
+        '              ),\n',
+        '',
+        remove=True,
+        note='去掉用户管理入口',
+    )
+
+    # 删掉 Emby 导出相关开关（本项目不导出媒体库元数据）
+    replace_text(
+        'lib/settings_screen.dart',
+        '                SwitchListTile(\n'
+        '                  value: widget.store.autoExport,\n'
+        "                  title: const Text('下载完成后自动导出 Emby'),\n"
+        '                  subtitle: const Text(\n'
+        "                    '在下载目录的 exports 中生成视频和海报 URL 元数据，可将该目录加入 Emby 媒体库。',\n"
+        '                  ),\n'
+        '                  onChanged: _busy\n'
+        '                      ? null\n'
+        '                      : (value) async {\n'
+        '                          try {\n'
+        '                            if (value) {\n'
+        '                              await BackgroundDownloads.ensureStarted();\n'
+        '                            }\n'
+        '                            await widget.store.setAutoExport(value);\n'
+        '                          } catch (error) {\n'
+        '                            if (mounted) {\n'
+        '                              setState(() => _message = error.toString());\n'
+        '                            }\n'
+        '                          }\n'
+        '                        },\n'
+        '                ),\n'
+        '                SwitchListTile(\n'
+        '                  value: widget.store.exportPosters,\n'
+        "                  title: const Text('同时导出海报文件'),\n"
+        "                  subtitle: const Text('默认只写海报 URL。源站海报需要解密或外部读取失败时可开启。'),\n"
+        '                  onChanged: _busy\n'
+        '                      ? null\n'
+        '                      : (value) => saveUserChange(\n'
+        '                          context,\n'
+        '                          () => widget.store.setExportPosters(value),\n'
+        '                        ),\n'
+        '                ),\n',
+        '',
+        remove=True,
+        note='去掉 Emby 导出开关',
+    )
+
+    # 提示文案里不再提合并与 Emby
+    replace_text(
+        'lib/settings_screen.dart',
+        "const Text('在下载页删除不需要的分集，在本地媒体页删除合并成品或 Emby 导出，可释放空间。'),",
+        "const Text('在下载页删除不需要的分集可以释放空间。'),",
+        marker='在下载页删除不需要的分集可以释放空间',
+        note='精简存储提示文案',
+    )
+
+    # 去掉下载页的「本地媒体与合并」入口
+    replace_text(
+        'lib/downloads_screen.dart',
+        '      IconButton(\n'
+        "        key: const ValueKey('download-local-media'),\n"
+        "        tooltip: '本地媒体与合并',\n"
+        '        onPressed: () => Navigator.push(\n'
+        '          context,\n'
+        '          MaterialPageRoute<void>(\n'
+        '            builder: (_) => LocalMediaScreen(\n'
+        '              repository: widget.repository,\n'
+        '              store: widget.store,\n'
+        '            ),\n'
+        '          ),\n'
+        '        ),\n'
+        '        icon: const Icon(Icons.video_library_outlined),\n'
+        '      ),\n',
+        '',
+        remove=True,
+        note='去掉本地媒体与合并入口',
     )
 
     # ---- 自动更新：注册更新动作 ----
