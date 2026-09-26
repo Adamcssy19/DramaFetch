@@ -33,6 +33,14 @@ const (
 	// 分片下载的线程数与单块大小，保持轻量，不占内存
 	dramaFetchThreads   = 4
 	dramaFetchChunkSize = 128 * 1024
+
+	// 单个加速源的探测超时。
+	// 探测是并发跑的、要等最慢的一个，而列表里有几个源在国内会直接卡死，
+	// 等满超时才继续 —— 界面上就是「点了检查更新半天没动静」，所以压到 2.5 秒。
+	dramaFetchProbeTimeout = 2500 * time.Millisecond
+
+	// 版本检查本身的超时，直连实测不到 1 秒。
+	dramaFetchCheckTimeout = 8 * time.Second
 )
 
 // dramaFetchMirror 是一个加速源；前缀为空表示直连。
@@ -96,7 +104,7 @@ func (engine *nativeEngine) probeDramaFetchMirrors(ctx context.Context) map[stri
 	}
 
 	endpoint := fmt.Sprintf("%s/repos/%s/releases/latest", dramaFetchAPIBase, dramaFetchRepo)
-	client := &http.Client{Timeout: 6 * time.Second}
+	client := &http.Client{Timeout: dramaFetchProbeTimeout}
 
 	results := make([]result, len(dramaFetchMirrors))
 	var wait sync.WaitGroup
@@ -105,7 +113,7 @@ func (engine *nativeEngine) probeDramaFetchMirrors(ctx context.Context) map[stri
 		go func(index int, mirror dramaFetchMirror) {
 			defer wait.Done()
 			target := mirror.Prefix + endpoint
-			requestCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+			requestCtx, cancel := context.WithTimeout(ctx, dramaFetchProbeTimeout)
 			defer cancel()
 			request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, target, nil)
 			if err != nil {

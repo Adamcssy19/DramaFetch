@@ -156,7 +156,22 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
         builder: (context, constraints) => ListView(
           padding: const EdgeInsets.fromLTRB(28, 26, 28, 34),
           children: [
-            if (updates != null)
+            if (updates != null) ...[
+              // 检查中与检查失败都要露出来。原来只有「发现新版本且用户点了稍后」
+              // 才有任何界面反馈，平时完全看不出自动更新在工作，像是没实现。
+              if (updates.checking || updates.error.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: DfTokens.gapSm),
+                  child: DfNotice(
+                    message: updates.checking
+                        ? '正在检查更新…'
+                        : '检查更新失败：${updates.error}',
+                    icon: updates.checking
+                        ? Icons.sync_rounded
+                        : Icons.error_outline_rounded,
+                    tone: updates.checking ? null : palette.danger,
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.only(bottom: DfTokens.gapMd),
                 child: DramaFetchUpdateBanner(
@@ -167,6 +182,7 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
                   },
                 ),
               ),
+            ],
             Text('搜索', style: DfText.display(palette)),
             const SizedBox(height: 6),
             Text(

@@ -1410,6 +1410,33 @@ def main():
         note='重试时按同一宽度清理缓存',
     )
 
+    # ---- 检查更新不该要管理员权限 ----
+    # 上游把「修改本机资源设置」的权限校验顺手复制到了更新与日志这几个方法上，
+    # 非管理员用户点「检查更新」会直接抛错，表现就是「自动更新完全没实现」。
+    # 这几个动作只是读写网络与本地日志，与资源设置无关，逐个摘掉校验。
+    for _signature, _call in (
+        ('Future<Map<String, dynamic>> probeUpdate() async {',
+         "    return _call({'action': 'update', 'command': 'probe'});"),
+        ("Future<Map<String, dynamic>> checkUpdate({String mirror = ''}) async {",
+         "    return _call({'action': 'update', 'command': 'check', 'query': mirror});"),
+        ('Future<void> openLogs() async {',
+         "    await _call({'action': 'update', 'command': 'openLogs'});"),
+        ("Future<Map<String, dynamic>> downloadUpdate({String mirror = ''}) async {",
+         "    return _call({'action': 'update', 'command': 'download', 'query': mirror});"),
+        ('Future<Map<String, dynamic>> updateStatus() async {',
+         "    return _call({'action': 'update', 'command': 'status'});"),
+        ('Future<Map<String, dynamic>> launchUpdate() async {',
+         "    return _call({'action': 'update', 'command': 'launch'});"),
+    ):
+        replace_text(
+            'lib/core_bridge.dart',
+            f'  {_signature}\n    _adminPermission();\n',
+            f'  {_signature}\n',
+            required=False,
+            marker=f'  {_signature}\n{_call}',
+            note=f'{_signature.split("(")[0].split()[-1]} 去掉管理员校验',
+        )
+
     # ---- 4. 版本号按本项目设置 ----
     version = apply_project_version()
 

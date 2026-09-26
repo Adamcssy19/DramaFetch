@@ -70,7 +70,11 @@ class DramaFetchUpdateManager extends ChangeNotifier {
     super.dispose();
   }
 
-  /// 启动时调用：先测速选源，再检查版本。
+  /// 启动时调用：先直连试一次，不通再探测加速源。
+  ///
+  /// 原来一上来就并发探测 5 个加速源、并等最慢的那个返回，而列表里有几个源在国内会
+  /// 直接卡死到超时，结果首次检查要六秒以上、界面又没有任何提示，看起来就像没这功能。
+  /// 实测直连不到 1 秒就能拿到结果，所以改成直连优先。
   Future<void> checkAuto() async {
     if (checking) return;
     checking = true;
@@ -78,28 +82,43 @@ class DramaFetchUpdateManager extends ChangeNotifier {
     notifyListeners();
 
     try {
+      await _fetch('');
+      mirror = '';
+      mirrorLabel = '直连 GitHub';
+      mirrorDelay = -1;
+      checking = false;
+      notifyListeners();
+      return;
+    } catch (_) {
+      // 直连不通，下面再走加速源
+    }
+
+    try {
       final probes = await repository.probeUpdate();
-      final best = probes['best'] as String? ?? '';
-      final label = probes['bestLabel'] as String? ?? '直连 GitHub';
-      mirror = best;
-      mirrorLabel = label;
+      mirror = probes['best'] as String? ?? '';
+      mirrorLabel = probes['bestLabel'] as String? ?? '直连 GitHub';
       mirrorDelay = (probes['bestDelay'] as num?)?.toInt() ?? -1;
     } catch (_) {
       // 测速失败就退回直连，不影响后面的检查
     }
 
     try {
-      final info = await repository.checkUpdate(mirror: mirror);
-      latest = info['latest'] as String? ?? '';
-      notes = info['notes'] as String? ?? '';
-      publishedAt = info['publishedAt'] as String? ?? '';
-      pageUrl = info['pageUrl'] as String? ?? '';
+      await _fetch(mirror);
     } catch (err) {
       error = err.toString();
     } finally {
       checking = false;
       notifyListeners();
     }
+  }
+
+  /// 拉一次版本信息并写进字段。mirror 为空表示直连官方接口。
+  Future<void> _fetch(String target) async {
+    final info = await repository.checkUpdate(mirror: target);
+    latest = info['latest'] as String? ?? '';
+    notes = info['notes'] as String? ?? '';
+    publishedAt = info['publishedAt'] as String? ?? '';
+    pageUrl = info['pageUrl'] as String? ?? '';
   }
 
   /// 换一个加速源重新检查。
@@ -110,11 +129,7 @@ class DramaFetchUpdateManager extends ChangeNotifier {
     error = '';
     notifyListeners();
     try {
-      final info = await repository.checkUpdate(mirror: mirror);
-      latest = info['latest'] as String? ?? '';
-      notes = info['notes'] as String? ?? '';
-      publishedAt = info['publishedAt'] as String? ?? '';
-      pageUrl = info['pageUrl'] as String? ?? '';
+      await _fetch(mirror);
     } catch (err) {
       error = err.toString();
     } finally {
