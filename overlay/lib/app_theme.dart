@@ -182,6 +182,17 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(radiusCard),
         ),
       ),
+      // 卡片：细描边、无阴影、8 像素圆角，贴近 WinUI 的卡片分层
+      cardTheme: CardThemeData(
+        elevation: 0,
+        color: dark ? const Color(0xFF2B2B2B) : const Color(0xFFFFFFFF),
+        surfaceTintColor: Colors.transparent,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusCard),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
       dialogTheme: DialogThemeData(
         backgroundColor: dark ? const Color(0xFF2B2B2B) : const Color(0xFFF9F9F9),
         surfaceTintColor: Colors.transparent,
@@ -196,10 +207,30 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
         ),
       ),
-      listTileTheme: const ListTileThemeData(
+      listTileTheme: ListTileThemeData(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(radiusControl)),
+          borderRadius: BorderRadius.circular(radiusControl),
         ),
+        titleTextStyle: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: scheme.onSurface,
+        ),
+        subtitleTextStyle: TextStyle(
+          fontSize: 12,
+          color: scheme.onSurfaceVariant,
+        ),
+        iconColor: scheme.onSurfaceVariant,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: dark
+            ? const Color(0xFF2D2D2D)
+            : const Color(0xFFFFFFFF),
+        side: BorderSide(color: scheme.outlineVariant),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusCard),
+        ),
+        labelStyle: TextStyle(color: scheme.onSurface, fontSize: 13),
       ),
     );
   }
