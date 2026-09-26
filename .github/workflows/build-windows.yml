@@ -89,6 +89,14 @@ jobs:
       - name: 应用定制
         run: python scripts/apply_custom.py
 
+      # 先单独跑一次静态检查，把本项目新增文件的问题在编译前拦下来
+      - name: 检查本项目新增文件
+        shell: pwsh
+        working-directory: upstream/guoapp
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/app_build.dart lib/app_theme.dart lib/download_methods.dart lib/resource_settings.dart lib/update_screen.dart
+
       - name: 构建应用
         run: python scripts/build_app.py
 

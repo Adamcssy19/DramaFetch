@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'download_methods.dart';
 import 'models.dart';
 
 class ResourceSettings {
