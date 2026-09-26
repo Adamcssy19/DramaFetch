@@ -62,7 +62,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
       if (!mounted) return;
       setState(() => _info = result);
     } catch (error) {
-      if (mounted) setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -90,7 +90,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
       if (mounted) {
         setState(() {
           _progress = const {};
-          _error = friendlyError(error);
+          _error = error.toString();
         });
       }
     }
@@ -104,7 +104,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
         context,
       ).showSnackBar(const SnackBar(content: Text('已启动安装程序，按提示完成更新即可')));
     } catch (error) {
-      if (mounted) setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = error.toString());
     }
   }
 
