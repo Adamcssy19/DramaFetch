@@ -1,0 +1,6 @@
+[pack]
+entry = "pack.py"
+class = "DramaPack"
+dependencies = ["http_pack"]
+version = "0.1.0"
+gdMinVersion = "4.3.8"
