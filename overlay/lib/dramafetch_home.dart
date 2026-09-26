@@ -3,12 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_layout.dart';
-import 'app_theme.dart';
 import 'core_bridge.dart';
+import 'design/df_design.dart';
 import 'dramafetch_update.dart';
 import 'local_store.dart';
 import 'models.dart';
-import 'widgets.dart';
 
 /// 首页：打开软件第一眼就是搜索。
 ///
@@ -146,8 +145,7 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final palette = DfPalette.of(context);
     final opened = widget.store.recentOpened;
     final typing = _input.text.trim().isNotEmpty;
     final updates = _updates;
@@ -156,28 +154,33 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
       animation: widget.store,
       builder: (context, _) => LayoutBuilder(
         builder: (context, constraints) => ListView(
-          padding: const EdgeInsets.fromLTRB(32, 26, 32, 32),
+          padding: const EdgeInsets.fromLTRB(28, 22, 28, 34),
           children: [
             if (updates != null)
-              DramaFetchUpdateBanner(
-                manager: updates,
-                onTap: () {
-                  updates.dialogShown = true;
-                  showUpdateDialog(context, updates);
-                },
+              Padding(
+                padding: const EdgeInsets.only(bottom: DfTokens.gapMd),
+                child: DramaFetchUpdateBanner(
+                  manager: updates,
+                  onTap: () {
+                    updates.dialogShown = true;
+                    showUpdateDialog(context, updates);
+                  },
+                ),
               ),
-            Text('搜索', style: AppTheme.title(context)),
+            Text('搜索', style: DfText.display(palette)),
             const SizedBox(height: 6),
             Text(
               '输剧名、剧集编号，或直接粘贴播放页链接',
-              style: AppTheme.caption(context),
+              style: DfText.caption(palette),
             ),
             const SizedBox(height: 20),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: _SearchBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: DfSearchField(
                 controller: _input,
                 focusNode: _focus,
+                autofocus: true,
+                hintText: '搜索想看的剧',
                 onChanged: (value) => setState(() => _onChanged(value)),
                 onSubmitted: (value) => unawaited(_submit(value)),
                 onClear: () {
@@ -185,408 +188,105 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
                   setState(() => _onChanged(''));
                   _focus.requestFocus();
                 },
-                showClear: typing,
               ),
             ),
             if (_loading) ...[
-              const SizedBox(height: 14),
-              const LinearProgressIndicator(minHeight: 2),
+              const SizedBox(height: DfTokens.gapMd),
+              const DfProgressBar(value: null, height: 3),
             ],
             if (_error != null) ...[
-              const SizedBox(height: 18),
-              _Notice(icon: Icons.error_outline, message: _error!),
+              const SizedBox(height: DfTokens.gapMd),
+              DfNotice(
+                message: _error!,
+                icon: Icons.error_outline_rounded,
+                tone: palette.danger,
+              ),
             ],
             if (!typing) ...[
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  Text('最近打开', style: AppTheme.section(context)),
-                  const Spacer(),
-                  if (opened.isNotEmpty)
-                    TextButton(
-                      onPressed: () =>
-                          unawaited(widget.store.clearRecentOpened()),
-                      child: const Text('清空记录'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
+              const SizedBox(height: DfTokens.gapXl),
               if (opened.isEmpty)
-                Text('还没有打开过任何剧', style: AppTheme.caption(context))
-              else
-                for (final entry in opened)
-                  _OpenedRow(
-                    title: entry['title'] ?? '',
-                    onTap: () => _open(
-                      Drama(
-                        id: entry['id'] ?? '',
-                        source: _sourceID,
-                        title: entry['title'] ?? '',
-                      ),
-                    ),
+                DfGlass(
+                  padding: const EdgeInsets.symmetric(vertical: DfTokens.gapLg),
+                  child: const DfEmptyState(
+                    icon: Icons.history_rounded,
+                    message: '还没有打开过任何剧',
+                    hint: '搜到之后点开，这里会留下记录',
+                    compact: true,
                   ),
+                )
+              else
+                DfGlass(
+                  padding: const EdgeInsets.all(DfTokens.gapSm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
+                        child: DfSectionHeader(
+                          title: '最近打开',
+                          subtitle: '共 ${opened.length} 部',
+                          padding: EdgeInsets.zero,
+                          trailing: DfGlassButton(
+                            label: '清空记录',
+                            height: 30,
+                            icon: Icons.delete_outline_rounded,
+                            onPressed: () =>
+                                unawaited(widget.store.clearRecentOpened()),
+                          ),
+                        ),
+                      ),
+                      for (final entry in opened)
+                        DfListRow(
+                          title: (entry['title'] ?? '').isEmpty
+                              ? '未命名'
+                              : entry['title']!,
+                          subtitle: entry['id'],
+                          leading: const DfIconBadge(
+                            icon: Icons.movie_outlined,
+                            size: 34,
+                            iconSize: 16,
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 18,
+                            color: palette.textTertiary,
+                          ),
+                          onTap: () => _open(
+                            Drama(
+                              id: entry['id'] ?? '',
+                              source: _sourceID,
+                              title: entry['title'] ?? '',
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
             ],
             if (typing && _results.isNotEmpty) ...[
-              const SizedBox(height: 28),
-              Text(
-                '搜索结果 · ${_results.length} 部',
-                style: AppTheme.section(context),
+              const SizedBox(height: DfTokens.gapXl),
+              DfSectionHeader(
+                title: '搜索结果',
+                subtitle: '找到 ${_results.length} 部',
               ),
-              const SizedBox(height: 14),
-              _ResultGrid(
+              DfPosterGrid(
                 items: _results,
                 repository: widget.repository,
                 width: constraints.maxWidth,
                 onOpen: _open,
               ),
             ],
-            if (typing && !_loading && _results.isEmpty && _error == null) ...[
-              const SizedBox(height: 60),
-              Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.search_off_rounded,
-                      size: 32,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '没有找到「$_submitted」相关的剧',
-                      style: AppTheme.caption(context),
-                    ),
-                  ],
+            if (typing && !_loading && _results.isEmpty && _error == null)
+              const Padding(
+                padding: EdgeInsets.only(top: 40),
+                child: DfEmptyState(
+                  icon: Icons.search_off_rounded,
+                  message: '没有找到相关的剧',
+                  hint: '换个关键词，或直接粘贴剧集编号与播放页链接',
                 ),
               ),
-            ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// 深色描边搜索框，照着 Uiverse 上那款样式做的：
-/// 深灰底、2 像素描边、圆角 5，聚焦时描边与文字转青色，并在左上方带一层青色光晕。
-class _SearchBox extends StatefulWidget {
-  const _SearchBox({
-    required this.controller,
-    required this.focusNode,
-    required this.onChanged,
-    required this.onSubmitted,
-    required this.onClear,
-    required this.showClear,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<String> onSubmitted;
-  final VoidCallback onClear;
-  final bool showClear;
-
-  @override
-  State<_SearchBox> createState() => _SearchBoxState();
-}
-
-class _SearchBoxState extends State<_SearchBox> {
-  static const _fill = Color(0xFF212121);
-  static const _cyan = Color(0xFF00FFFF);
-  static const _stroke = Color(0xFFFFFFFF);
-
-  bool _focused = false;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.focusNode.addListener(_onFocusChanged);
-  }
-
-  @override
-  void dispose() {
-    widget.focusNode.removeListener(_onFocusChanged);
-    super.dispose();
-  }
-
-  void _onFocusChanged() {
-    if (!mounted) return;
-    setState(() => _focused = widget.focusNode.hasFocus);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 100),
-      curve: Curves.easeOut,
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: _fill,
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: _focused ? _cyan : _stroke, width: 2),
-        boxShadow: _focused
-            ? [
-                BoxShadow(
-                  color: _cyan.withValues(alpha: 0.85),
-                  offset: const Offset(-3, -3),
-                  blurRadius: 15,
-                ),
-              ]
-            : null,
-      ),
-      child: TextField(
-        controller: widget.controller,
-        focusNode: widget.focusNode,
-        autofocus: true,
-        cursorColor: _focused ? _cyan : _stroke,
-        style: TextStyle(
-          fontSize: 14,
-          color: _focused ? _cyan : _stroke,
-        ),
-        decoration: InputDecoration(
-          hintText: '搜索想看的剧',
-          hintStyle: const TextStyle(color: Color(0xFF9E9E9E), fontSize: 14),
-          isDense: true,
-          filled: false,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-          suffixIcon: !widget.showClear
-              ? null
-              : IconButton(
-                  tooltip: '清空',
-                  iconSize: 16,
-                  color: _focused ? _cyan : _stroke,
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: widget.onClear,
-                ),
-        ),
-        onChanged: widget.onChanged,
-        onSubmitted: widget.onSubmitted,
-      ),
-    );
-  }
-}
-
-/// 最近打开过的一部剧。
-class _OpenedRow extends StatefulWidget {
-  const _OpenedRow({required this.title, required this.onTap});
-
-  final String title;
-  final VoidCallback onTap;
-
-  @override
-  State<_OpenedRow> createState() => _OpenedRowState();
-}
-
-class _OpenedRowState extends State<_OpenedRow> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 130),
-          curve: Curves.easeOut,
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          margin: const EdgeInsets.only(bottom: 2),
-          decoration: BoxDecoration(
-            color: _hovered
-                ? theme.colorScheme.surfaceContainer
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppTheme.radiusControl),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.history_rounded,
-                size: 16,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  widget.title.isEmpty ? '未命名' : widget.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 搜索结果的海报墙。按可用宽度自动决定列数。
-class _ResultGrid extends StatelessWidget {
-  const _ResultGrid({
-    required this.items,
-    required this.repository,
-    required this.width,
-    required this.onOpen,
-  });
-
-  final List<Drama> items;
-  final AppRepository repository;
-  final double width;
-  final void Function(Drama drama) onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final available = width - 64;
-    final columns = (available / 168).floor().clamp(2, 8);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        crossAxisSpacing: 14,
-        mainAxisSpacing: 14,
-        mainAxisExtent: 244,
-      ),
-      itemBuilder: (context, index) => _ResultCard(
-        drama: items[index],
-        repository: repository,
-        onTap: () => onOpen(items[index]),
-      ),
-    );
-  }
-}
-
-/// 一张海报卡片：封面加标题，悬停时描边变强调色。
-class _ResultCard extends StatefulWidget {
-  const _ResultCard({
-    required this.drama,
-    required this.repository,
-    required this.onTap,
-  });
-
-  final Drama drama;
-  final AppRepository repository;
-  final VoidCallback onTap;
-
-  @override
-  State<_ResultCard> createState() => _ResultCardState();
-}
-
-class _ResultCardState extends State<_ResultCard> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final drama = widget.drama;
-    final meta = <String>[
-      if (drama.episodes > 0) '${drama.episodes} 集',
-      if (drama.category.isNotEmpty) drama.category,
-    ].join(' · ');
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOut,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-                  border: Border.all(
-                    color: _hovered ? scheme.primary : scheme.outlineVariant,
-                    width: _hovered ? 1.5 : 1,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusCard - 1),
-                  child: DramaCover(
-                    drama: drama,
-                    repository: widget.repository,
-                    radius: AppTheme.radiusCard - 1,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              drama.title.isEmpty ? '未命名' : drama.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: _hovered ? scheme.primary : scheme.onSurface,
-              ),
-            ),
-            if (meta.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                meta,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 提示条：用于错误等需要立刻看见的信息。
-class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: scheme.errorContainer.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: scheme.error.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: scheme.error),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(fontSize: 13, color: scheme.onSurface),
-            ),
-          ),
-        ],
       ),
     );
   }

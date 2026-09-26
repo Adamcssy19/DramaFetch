@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_build.dart';
+import 'design/df_design.dart';
 
 /// 侧边导航的一项。
 class DramaFetchNavItem {
@@ -15,10 +16,11 @@ class DramaFetchNavItem {
   final String label;
 }
 
-/// Windows 11 风格的侧边导航。
+/// 卡片式侧边导航：整条导航是一块悬浮的液态玻璃板。
 ///
-/// 顶部是应用图标与名称，下面是四个入口。选中项用左侧强调色短条加浅色底表示，
-/// 悬停项有过渡底色，整体贴合 WinUI 3 里导航视图的观感。
+/// 这里是全局唯一允许开背景模糊的地方之一（另一处是顶栏）。
+/// 侧边栏尺寸固定、内容不滚动，[BackdropFilter] 只在窗口尺寸变化时重算一次，
+/// 不会像列表卡片那样每帧复制背景，因此成本可以接受。
 class DramaFetchNav extends StatelessWidget {
   const DramaFetchNav({
     super.key,
@@ -26,6 +28,7 @@ class DramaFetchNav extends StatelessWidget {
     required this.onSelected,
     required this.expanded,
     required this.destinations,
+    this.version,
   });
 
   final int selectedIndex;
@@ -33,24 +36,59 @@ class DramaFetchNav extends StatelessWidget {
   final bool expanded;
   final List<DramaFetchNavItem> destinations;
 
+  /// 底部显示的版本号，不传则不显示。
+  final String? version;
+
   @override
   Widget build(BuildContext context) {
+    final palette = DfPalette.of(context);
+
     return SizedBox(
-      width: expanded ? 232 : 56,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _Brand(expanded: expanded),
-          const SizedBox(height: 6),
-          for (var index = 0; index < destinations.length; index++)
-            _NavTile(
-              item: destinations[index],
-              selected: index == selectedIndex,
-              expanded: expanded,
-              onTap: () => onSelected(index),
-            ),
-          const Spacer(),
-        ],
+      width: expanded ? 238 : 74,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 6, 12),
+        child: DfGlass(
+          radius: DfTokens.radiusPanel,
+          blur: 18,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Brand(expanded: expanded),
+              const SizedBox(height: DfTokens.gapSm),
+              DfDivider(height: DfTokens.gapSm, indent: 4),
+              const SizedBox(height: DfTokens.gapSm),
+              for (var index = 0; index < destinations.length; index++)
+                _NavTile(
+                  item: destinations[index],
+                  selected: index == selectedIndex,
+                  expanded: expanded,
+                  onTap: () => onSelected(index),
+                ),
+              const Spacer(),
+              if (version != null && version!.isNotEmpty) ...[
+                const SizedBox(height: DfTokens.gapSm),
+                Padding(
+                  padding: const EdgeInsets.only(left: 10, bottom: 4),
+                  child: expanded
+                      ? Text(
+                          'v${version!.split('+').first}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DfText.micro(palette),
+                        )
+                      : Center(
+                          child: Text(
+                            'v${version!.split('+').first}',
+                            maxLines: 1,
+                            style: DfText.micro(palette),
+                          ),
+                        ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -64,20 +102,26 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final palette = DfPalette.of(context);
     return SizedBox(
-      height: 56,
+      height: 46,
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: expanded ? 16 : 0),
+        padding: EdgeInsets.symmetric(horizontal: expanded ? 8 : 0),
         child: Row(
           mainAxisAlignment: expanded
               ? MainAxisAlignment.start
               : MainAxisAlignment.center,
           children: [
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: Image(
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                gradient: DfTokens.accentGradient,
+                boxShadow: DfTokens.shadowSoft,
+              ),
+              padding: const EdgeInsets.all(5),
+              child: const Image(
                 image: AssetImage('assets/logo.png'),
                 filterQuality: FilterQuality.medium,
               ),
@@ -91,9 +135,9 @@ class _Brand extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.1,
-                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                    color: palette.textPrimary,
                   ),
                 ),
               ),
@@ -105,7 +149,7 @@ class _Brand extends StatelessWidget {
   }
 }
 
-/// 单个导航项。选中时左侧有一条强调色短条，悬停时底色轻微变化。
+/// 单个导航项：选中时是强调色玻璃胶囊，悬停只改底色。
 class _NavTile extends StatefulWidget {
   const _NavTile({
     required this.item,
@@ -129,18 +173,20 @@ class _NavTileState extends State<_NavTile> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final accent = widget.selected ? scheme.primary : scheme.onSurface;
+    final palette = DfPalette.of(context);
+    final active = widget.selected || _hovered;
 
-    final Color? background = widget.selected
-        ? (dark ? const Color(0xFF2D2D2D) : const Color(0xFFE9E9E9))
-        : (_hovered
-              ? (dark ? const Color(0xFF2A2A2A) : const Color(0xFFEFEFEF))
-              : Colors.transparent);
+    final Color background;
+    if (widget.selected) {
+      background = palette.accentSoft;
+    } else if (_hovered) {
+      background = palette.cardFillHover;
+    } else {
+      background = Colors.transparent;
+    }
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(widget.expanded ? 8 : 6, 2, 8, 2),
+      padding: const EdgeInsets.only(bottom: DfTokens.gapXs),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovered = true),
@@ -151,73 +197,62 @@ class _NavTileState extends State<_NavTile> {
           child: Focus(
             onFocusChange: (value) => setState(() => _focused = value),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
+              duration: const Duration(milliseconds: 130),
               curve: Curves.easeOut,
-              height: 40,
+              height: 42,
               decoration: BoxDecoration(
                 color: background,
-                borderRadius: BorderRadius.circular(5),
-                border: _focused
-                    ? Border.all(color: scheme.onSurface, width: 1.5)
-                    : null,
+                borderRadius: BorderRadius.circular(DfTokens.radiusControl),
+                border: Border.all(
+                  color: widget.selected
+                      ? palette.accent.withValues(alpha: 0.45)
+                      : (_focused
+                            ? palette.accent.withValues(alpha: 0.6)
+                            : Colors.transparent),
+                ),
               ),
               child: Row(
+                mainAxisAlignment: widget.expanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
                 children: [
-                  // 选中指示条：WinUI 3 里贴在图标左侧的短条
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOutCubic,
-                    width: 3,
-                    height: widget.selected ? 16 : 0,
-                    margin: const EdgeInsets.only(left: 3, right: 7),
-                    decoration: BoxDecoration(
-                      color: scheme.primary,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+                  if (widget.expanded)
+                    const SizedBox(width: 12)
+                  else
+                    const Spacer(),
+                  Icon(
+                    widget.selected
+                        ? widget.item.selectedIcon
+                        : widget.item.icon,
+                    size: 18,
+                    color: widget.selected
+                        ? palette.accent
+                        : (_hovered
+                              ? palette.textPrimary
+                              : palette.textSecondary),
                   ),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        left: widget.selected ? 0 : 7,
-                        right: widget.expanded ? 8 : 10,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: widget.expanded
-                            ? MainAxisAlignment.start
-                            : MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            widget.selected
-                                ? widget.item.selectedIcon
-                                : widget.item.icon,
-                            size: 18,
-                            color: widget.selected
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
-                          ),
-                          if (widget.expanded) ...[
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                widget.item.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: widget.selected
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                  color: widget.selected
-                                      ? accent
-                                      : scheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+                  if (widget.expanded) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        widget.item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: widget.selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: active
+                              ? (widget.selected
+                                    ? palette.accent
+                                    : palette.textPrimary)
+                              : palette.textSecondary,
+                        ),
                       ),
                     ),
-                  ),
+                  ] else
+                    const Spacer(),
                 ],
               ),
             ),

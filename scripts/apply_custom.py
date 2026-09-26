@@ -1278,6 +1278,173 @@ def main():
         note='设置页更新入口',
     )
 
+    # ---- 卡片式 + 液态玻璃：全局背景、顶栏玻璃条、页面留白 ----
+    # 背景画在 MaterialApp.builder 的最外层，页面自身保持透明，
+    # 玻璃面板才有东西可以透出来（纯色底上的半透明面板看起来只是灰方块）。
+    replace_text(
+        'lib/main.dart',
+        "import 'app_theme.dart';\n",
+        "import 'app_theme.dart';\nimport 'design/df_design.dart';\n",
+        required=False,
+        marker="import 'design/df_design.dart';",
+        note='引入设计系统',
+    )
+    replace_text(
+        'lib/main.dart',
+        '        child: ColoredBox(\n'
+        '          color: theme.scaffoldBackgroundColor,\n'
+        '          child: AppOrientationScope(\n',
+        '        child: DfBackdrop(\n'
+        '          child: AppOrientationScope(\n',
+        marker='DfBackdrop(',
+        note='全局渐变背景与光斑',
+    )
+
+    # 顶栏换成一块悬浮玻璃条，标题显示当前页名
+    replace_text(
+        'lib/home_screen.dart',
+        "import 'dramafetch_nav.dart';\n",
+        "import 'dramafetch_nav.dart';\n"
+        "import 'dramafetch_topbar.dart';\n"
+        "import 'design/df_design.dart';\n",
+        required=False,
+        marker="import 'dramafetch_topbar.dart';",
+        note='引入顶栏玻璃条',
+    )
+    replace_text(
+        'lib/home_screen.dart',
+        '            toolbarHeight: television ? 64 : 46,\n'
+        '            titleSpacing: 12,\n',
+        '            toolbarHeight: television ? 64 : 56,\n'
+        '            titleSpacing: 20,\n'
+        '            flexibleSpace: const DramaFetchTopBar(),\n',
+        marker='flexibleSpace: const DramaFetchTopBar()',
+        note='顶栏加玻璃条',
+    )
+    replace_text(
+        'lib/home_screen.dart',
+        '            title: _selectionMode\n'
+        '                ? const Text(\n'
+        "                    '选择短剧',\n"
+        '                    maxLines: 1,\n'
+        '                    overflow: TextOverflow.ellipsis,\n'
+        '                  )\n'
+        '                : const SizedBox.shrink(),\n',
+        '            title: _selectionMode\n'
+        '                ? const Text(\n'
+        "                    '选择短剧',\n"
+        '                    maxLines: 1,\n'
+        '                    overflow: TextOverflow.ellipsis,\n'
+        '                  )\n'
+        '                : Text(\n'
+        "                    const ['搜索', '榜单', '下载', '设置'][_tab.clamp(0, 3)],\n"
+        '                    maxLines: 1,\n'
+        '                    overflow: TextOverflow.ellipsis,\n'
+        '                  ),\n',
+        marker="const ['搜索', '榜单', '下载', '设置'][_tab.clamp(0, 3)]",
+        note='顶栏显示当前页名',
+    )
+
+    # 侧边栏自带圆角、间距与玻璃底，上游的分隔竖线就多余了
+    replace_text(
+        'lib/home_screen.dart',
+        '                  const VerticalDivider(width: 1, thickness: 1),\n',
+        '',
+        remove=True,
+        note='去掉侧边栏分隔线',
+    )
+    replace_text(
+        'lib/home_screen.dart',
+        '                    expanded: constraints.maxWidth >= 880,\n'
+        '                    destinations: const [\n',
+        '                    expanded: constraints.maxWidth >= 880,\n'
+        '                    version: AppLayout.versionOf(context),\n'
+        '                    destinations: const [\n',
+        marker='version: AppLayout.versionOf(context),',
+        note='侧边栏显示版本号',
+    )
+
+    # ---- 低内存：封面按显示尺寸解码 ----
+    # 上游统一按 440 宽解码，海报墙卡片实际只有一百多像素宽。多出来的像素全在内存里躺着，
+    # 一屏滚动几十张时差出几十兆。这里把解码宽度做成参数，海报墙传小值，详情页保持原样。
+    replace_text(
+        'lib/widgets.dart',
+        '    required this.repository,\n'
+        '    this.radius = 14,\n'
+        '  });\n'
+        '  final Drama drama;\n'
+        '  final AppRepository repository;\n'
+        '  final double radius;\n',
+        '    required this.repository,\n'
+        '    this.radius = 14,\n'
+        '    this.decodeWidth = 440,\n'
+        '  });\n'
+        '  final Drama drama;\n'
+        '  final AppRepository repository;\n'
+        '  final double radius;\n'
+        '\n'
+        '  /// 封面解码宽度。按卡片实际显示宽度解码能省下大量内存：\n'
+        '  /// 440 宽解码后约 1.1 MB 一张，260 宽只要约 0.4 MB。\n'
+        '  final int decodeWidth;\n',
+        marker='封面解码宽度。按卡片实际显示宽度解码能省下大量内存：',
+        note='封面组件支持指定解码宽度',
+    )
+    replace_text(
+        'lib/widgets.dart',
+        '              drama: drama,\n'
+        '              repository: repository,\n'
+        '              placeholder: placeholder,\n'
+        '            ),\n',
+        '              drama: drama,\n'
+        '              repository: repository,\n'
+        '              placeholder: placeholder,\n'
+        '              decodeWidth: decodeWidth,\n'
+        '            ),\n',
+        marker='decodeWidth: decodeWidth,',
+        note='封面解码宽度透传',
+    )
+    replace_text(
+        'lib/widgets.dart',
+        '    required this.placeholder,\n'
+        '  });\n'
+        '  final Drama drama;\n'
+        '  final AppRepository repository;\n'
+        '  final Widget placeholder;\n',
+        '    required this.placeholder,\n'
+        '    this.decodeWidth = 440,\n'
+        '  });\n'
+        '  final Drama drama;\n'
+        '  final AppRepository repository;\n'
+        '  final Widget placeholder;\n'
+        '\n'
+        '  /// 解码宽度，说明见 [DramaCover.decodeWidth]。\n'
+        '  final int decodeWidth;\n',
+        marker='说明见 [DramaCover.decodeWidth]',
+        note='封面缓存组件支持指定解码宽度',
+    )
+    replace_text(
+        'lib/widgets.dart',
+        '        cacheWidth: 440,\n',
+        '        cacheWidth: widget.decodeWidth,\n',
+        marker='cacheWidth: widget.decodeWidth,',
+        note='封面按指定宽度解码',
+    )
+    replace_text(
+        'lib/widgets.dart',
+        '      await ResizeImage.resizeIfNeeded(\n'
+        '        440,\n'
+        '        null,\n'
+        '        FileImage(File(path)),\n'
+        '      ).evict();\n',
+        '      await ResizeImage.resizeIfNeeded(\n'
+        '        widget.decodeWidth,\n'
+        '        null,\n'
+        '        FileImage(File(path)),\n'
+        '      ).evict();\n',
+        marker='ResizeImage.resizeIfNeeded(\n        widget.decodeWidth,',
+        note='重试时按同一宽度清理缓存',
+    )
+
     # ---- 4. 版本号按本项目设置 ----
     version = apply_project_version()
 
