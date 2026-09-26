@@ -9,53 +9,37 @@ import 'package:flutter/material.dart';
 ///
 /// 所有颜色、尺寸都是编译期常量，重建时不会重新分配对象。
 abstract final class DfTokens {
-  /// 大面板（侧边栏、卡片组）圆角。
-  static const radiusPanel = 24.0;
+  /// 大面板（对话框、抽屉）圆角。
+  static const radiusPanel = 8.0;
 
   /// 卡片圆角。
-  static const radiusCard = 18.0;
+  static const radiusCard = 8.0;
 
   /// 输入框、按钮等控件圆角。
-  static const radiusControl = 12.0;
+  static const radiusControl = 4.0;
 
-  /// 胶囊（标签、状态点）圆角。
-  static const radiusPill = 999.0;
+  /// 原来用于胶囊的圆角，Fluent 里统一成小圆角。
+  static const radiusPill = 4.0;
 
-  /// 控件统一高度，保证一屏内所有可点区域手感一致。
-  static const controlHeight = 38.0;
+  /// 控件统一高度，与系统设置里的按钮、输入框一致。
+  static const controlHeight = 34.0;
 
-  /// 卡片外阴影，比普通 Material 阴影更淡更散，接近玻璃落在桌面上的感觉。
-  static const shadowSoft = <BoxShadow>[
-    BoxShadow(
-      color: Color(0x14101828),
-      blurRadius: 18,
-      offset: Offset(0, 6),
-    ),
-  ];
+  /// 卡片不投影，靠描边分层。
+  static const shadowSoft = <BoxShadow>[];
 
-  /// 浮层阴影，比卡片更重一档。
+  /// 浮层（对话框、菜单）用一档很轻的阴影。
   static const shadowFloat = <BoxShadow>[
-    BoxShadow(
-      color: Color(0x24101828),
-      blurRadius: 34,
-      offset: Offset(0, 14),
-    ),
+    BoxShadow(color: Color(0x1F000000), blurRadius: 20, offset: Offset(0, 6)),
   ];
 
-  /// 玻璃高光渐变：左上亮、右下灭，模拟玻璃板受光。
+  /// 没有玻璃高光。
   static const sheen = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0x1FFFFFFF), Color(0x08FFFFFF), Color(0x03FFFFFF)],
-    stops: [0.0, 0.45, 1.0],
+    colors: [Color(0x00000000), Color(0x00000000)],
   );
 
-  /// 强调色渐变（青 → 紫），用于主按钮与选中态。
+  /// 强调色不做渐变，Fluent 的主按钮是纯色。
   static const accentGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFF5AC8FA), Color(0xFF7B7BFF), Color(0xFFB06BFF)],
-    stops: [0.0, 0.55, 1.0],
+    colors: [Color(0xFF005FB8), Color(0xFF005FB8)],
   );
 
   static const gapXs = 6.0;
@@ -157,70 +141,70 @@ class DfPalette {
   final Color success;
   final Color warning;
 
-  /// 深色：玻璃在暗背景上靠高光立起来。
+  /// 深色：Fluent 深色层色，卡片比底色亮一档，靠描边分开。
   static const dark = DfPalette(
     brightness: Brightness.dark,
-    backdropTop: Color(0xFF0A0C11),
-    backdropBottom: Color(0xFF0D1017),
-    glowPrimary: Color(0x333D6BFF),
-    glowSecondary: Color(0x2E8B5CF6),
-    glowTertiary: Color(0x2414B8A6),
-    glassFill: Color(0x14FFFFFF),
-    glassFillStrong: Color(0x1FFFFFFF),
-    glassStroke: Color(0x1FFFFFFF),
-    glassSheen: Color(0x1AFFFFFF),
-    cardFill: Color(0x10FFFFFF),
-    cardFillHover: Color(0x1AFFFFFF),
-    cardStroke: Color(0x17FFFFFF),
-    cardStrokeHover: Color(0x33FFFFFF),
-    panelFill: Color(0x0DFFFFFF),
-    controlFill: Color(0x14FFFFFF),
-    controlStroke: Color(0x1FFFFFFF),
-    surfaceSolid: Color(0xFF14171E),
-    surfaceSolidAlt: Color(0xFF1C2029),
-    textPrimary: Color(0xFFF2F4F8),
-    textSecondary: Color(0xB3E6EAF2),
-    textTertiary: Color(0x80A9B2C3),
-    accent: Color(0xFF5AC8FA),
-    accentAlt: Color(0xFF9B8CFF),
-    accentSoft: Color(0x2E5AC8FA),
-    divider: Color(0x14FFFFFF),
-    danger: Color(0xFFFF6B81),
-    success: Color(0xFF4ADE80),
-    warning: Color(0xFFFBBF24),
+    backdropTop: Color(0xFF202020),
+    backdropBottom: Color(0xFF202020),
+    glowPrimary: Color(0x00000000),
+    glowSecondary: Color(0x00000000),
+    glowTertiary: Color(0x00000000),
+    glassFill: Color(0xFF2B2B2B),
+    glassFillStrong: Color(0xFF2B2B2B),
+    glassStroke: Color(0xFF3A3A3A),
+    glassSheen: Color(0x00000000),
+    cardFill: Color(0xFF2B2B2B),
+    cardFillHover: Color(0xFF333333),
+    cardStroke: Color(0xFF3A3A3A),
+    cardStrokeHover: Color(0xFF4D4D4D),
+    panelFill: Color(0xFF272727),
+    controlFill: Color(0xFF2D2D2D),
+    controlStroke: Color(0xFF3A3A3A),
+    surfaceSolid: Color(0xFF202020),
+    surfaceSolidAlt: Color(0xFF2B2B2B),
+    textPrimary: Color(0xFFF2F2F2),
+    textSecondary: Color(0xFFC3C3C3),
+    textTertiary: Color(0xFF8A8A8A),
+    accent: Color(0xFF4CC2FF),
+    accentAlt: Color(0xFF4CC2FF),
+    accentSoft: Color(0x264CC2FF),
+    divider: Color(0xFF333333),
+    danger: Color(0xFFFF99A4),
+    success: Color(0xFF6CCB5F),
+    warning: Color(0xFFFCE100),
   );
 
-  /// 浅色：玻璃靠白色填充加极淡阴影浮起来。
+  /// 浅色：Mica 基色底 + 白卡片。
   static const light = DfPalette(
     brightness: Brightness.light,
-    backdropTop: Color(0xFFEFF2F8),
-    backdropBottom: Color(0xFFE6EBF5),
-    glowPrimary: Color(0x337EA6FF),
-    glowSecondary: Color(0x2EB79BFF),
-    glowTertiary: Color(0x2690E0D0),
-    glassFill: Color(0xB8FFFFFF),
-    glassFillStrong: Color(0xE6FFFFFF),
-    glassStroke: Color(0x99FFFFFF),
-    glassSheen: Color(0x0DFFFFFF),
-    cardFill: Color(0xCCFFFFFF),
-    cardFillHover: Color(0xF2FFFFFF),
-    cardStroke: Color(0xB3FFFFFF),
-    cardStrokeHover: Color(0xFFD8DEF0),
-    panelFill: Color(0xA6FFFFFF),
-    controlFill: Color(0xCCFFFFFF),
-    controlStroke: Color(0x99FFFFFF),
+    backdropTop: Color(0xFFF3F3F3),
+    backdropBottom: Color(0xFFF3F3F3),
+    glowPrimary: Color(0x00000000),
+    glowSecondary: Color(0x00000000),
+    glowTertiary: Color(0x00000000),
+    glassFill: Color(0xFFFFFFFF),
+    glassFillStrong: Color(0xFFFFFFFF),
+    glassStroke: Color(0xFFE5E5E5),
+    glassSheen: Color(0x00000000),
+    cardFill: Color(0xFFFFFFFF),
+    cardFillHover: Color(0xFFF7F7F7),
+    cardStroke: Color(0xFFE5E5E5),
+    cardStrokeHover: Color(0xFFCFCFCF),
+    panelFill: Color(0xFFF3F3F3),
+    controlFill: Color(0xFFFFFFFF),
+    controlStroke: Color(0xFFD6D6D6),
     surfaceSolid: Color(0xFFFFFFFF),
-    surfaceSolidAlt: Color(0xFFF6F8FC),
-    textPrimary: Color(0xFF14161C),
-    textSecondary: Color(0xA614161C),
-    textTertiary: Color(0x7314161C),
-    accent: Color(0xFF1F7AE0),
-    accentAlt: Color(0xFF6A5AE0),
-    accentSoft: Color(0x1F1F7AE0),
-    divider: Color(0x14000000),
-    danger: Color(0xFFD92D4B),
-    success: Color(0xFF12805C),
-    warning: Color(0xFFB4690E),
+    surfaceSolidAlt: Color(0xFFF9F9F9),
+    textPrimary: Color(0xFF1A1A1A),
+    textSecondary: Color(0xFF5D5D5D),
+    textTertiary: Color(0xFF8A8A8A),
+    accent: Color(0xFF005FB8),
+    accentAlt: Color(0xFF005FB8),
+    accentSoft: Color(0x1F005FB8),
+    divider: Color(0xFFE5E5E5),
+    danger: Color(0xFFC42B1C),
+    success: Color(0xFF0F7B0F),
+    warning: Color(0xFF9D5D00),
   );
 
   static DfPalette of(BuildContext context) =>

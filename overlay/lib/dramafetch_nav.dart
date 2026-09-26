@@ -49,7 +49,7 @@ class DramaFetchNav extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 12, 6, 12),
         child: DfGlass(
           radius: DfTokens.radiusPanel,
-          blur: 18,
+          blur: 0,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
