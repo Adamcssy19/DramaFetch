@@ -55,15 +55,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
         run: |
           uv python install 3.13
-          uv sync
+          uv sync --frozen
 
       - name: Build with Nuitka
         shell: pwsh
