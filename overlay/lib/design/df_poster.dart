@@ -4,7 +4,7 @@ import '../core_bridge.dart';
 import '../models.dart';
 import '../widgets.dart';
 
-import 'df_surface.dart';
+import 'df_controls.dart';
 import 'df_tokens.dart';
 
 /// 海报卡：搜索结果与榜单的主力单元。

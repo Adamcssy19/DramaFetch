@@ -109,9 +109,6 @@ abstract final class AppTheme {
           scrim: const Color(0x99000000),
         );
 
-    final controlShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(DfTokens.radiusControl),
-    );
     final pillShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(DfTokens.radiusPill),
     );

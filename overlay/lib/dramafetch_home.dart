@@ -277,11 +277,13 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
               ),
             ],
             if (typing && !_loading && _results.isEmpty && _error == null)
-              const Padding(
-                padding: EdgeInsets.only(top: 40),
+              Padding(
+                padding: const EdgeInsets.only(top: 40),
                 child: DfEmptyState(
                   icon: Icons.search_off_rounded,
-                  message: '没有找到相关的剧',
+                  message: _submitted.isEmpty
+                      ? '没有找到相关的剧'
+                      : '没有找到「$_submitted」相关的剧',
                   hint: '换个关键词，或直接粘贴剧集编号与播放页链接',
                 ),
               ),

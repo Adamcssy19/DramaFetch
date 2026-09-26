@@ -523,7 +523,7 @@ class DfEmptyState extends StatelessWidget {
             ],
             if (action != null) ...[
               const SizedBox(height: DfTokens.gapMd),
-              action!,
+              ?action,
             ],
           ],
         ),

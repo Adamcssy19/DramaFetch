@@ -213,7 +213,6 @@ class _DfCardState extends State<DfCard> {
   @override
   Widget build(BuildContext context) {
     final palette = DfPalette.of(context);
-    final active = widget.selected || _hovered;
 
     final Color fill;
     if (widget.selected) {
