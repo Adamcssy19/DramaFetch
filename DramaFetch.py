@@ -86,7 +86,7 @@ def startApp(application, isSilent=False):
 
     MainWindow.refreshThemeColor()
 
-    featureService, taskService, aria2RpcServer, updateService, runtimeStatusService = createServices(
+    featureService, taskService, updateService, runtimeStatusService = createServices(
         coroutineRunner, categoryService, speedMeter,
     )
     loadPacks(featureService, coroutineRunner, speedMeter)
@@ -163,30 +163,10 @@ def startApp(application, isSilent=False):
         raiseWindow(window)
         return window
 
-    def onDraftRequested(tasks):
-        nonlocal window
-        if window is None:
-            window = MainWindow(taskService, featureService, categoryService, speedMeter, coroutineRunner, plan, updateService)
-            window.setupPacks()
-            window.destroyed.connect(onWindowDestroyed)
-        window.addTasks(tasks)
-
     if sys.platform != "darwin":
         signalBus.activationRequested.connect(show)
     signalBus.openUriRequested.connect(lambda uris: show().addUrls(uris))
     signalBus.exceptionCaught.connect(lambda msg: show().alertException(msg))
-
-    aria2RpcServer.taskDraftRequested.connect(onDraftRequested)
-    if cfg.isAria2RpcEnabled.value:
-        aria2RpcServer.start()
-    cfg.isAria2RpcEnabled.valueChanged.connect(aria2RpcServer.setEnabled)
-
-    def onAria2PortChanged(_port):
-        if cfg.isAria2RpcEnabled.value:
-            aria2RpcServer.stop()
-            aria2RpcServer.start()
-
-    cfg.aria2RpcPort.valueChanged.connect(onAria2PortChanged)
 
     application.clipboardListener.urlsDetected.connect(lambda urls: show().addUrls(urls))
 
@@ -238,7 +218,7 @@ def startApp(application, isSilent=False):
     updateService.changed.connect(onUpdateChanged)
     checkUpdateAtStartup(updateService)
 
-    application.aboutToQuit.connect(lambda: stopEngine(taskService, aria2RpcServer, featureService, coroutineRunner, speedMeter, updateService))
+    application.aboutToQuit.connect(lambda: stopEngine(taskService, featureService, coroutineRunner, speedMeter, updateService))
 
 
 if __name__ == "__main__":

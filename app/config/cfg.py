@@ -263,15 +263,6 @@ class Config(QConfig):
     # UrlScheme（drama:// 协议唤起）
     isUrlSchemeRegistered = ConfigItem("Browser", "UrlSchemeRegistered", True, BoolValidator())
 
-    # Aria2 RPC 兼容
-    isAria2RpcEnabled = ConfigItem("Aria2Rpc", "Enabled", False, BoolValidator())
-    aria2RpcPort = RangeConfigItem("Aria2Rpc", "Port", 16800, RangeValidator(1024, 65535))
-    aria2RpcToken = ConfigItem("Aria2Rpc", "Token", "")
-    aria2RpcEmulateFingerprint = ConfigItem("Aria2Rpc", "EmulateFingerprint", False, BoolValidator())
-    shouldDraftTakenDownload = ConfigItem(
-        "Aria2Rpc", "EnableRaiseWindowWhenReceiveMsg", False, BoolValidator()
-    )
-
     # 个性化
     if sys.platform == "win32":
         from app.platform.windows import isWin10

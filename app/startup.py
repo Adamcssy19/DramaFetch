@@ -53,7 +53,6 @@ def loadEngine(application):
 
 def createServices(coroutineRunner, categoryService, speedMeter):
     from PySide6.QtCore import QFileSystemWatcher
-    from app.services.aria2_rpc import Aria2RpcServer
     from app.services.feature_service import FeatureService
     from app.services.runtime_status import RuntimeStatusService
     from app.services.task_service import TaskService
@@ -63,10 +62,9 @@ def createServices(coroutineRunner, categoryService, speedMeter):
     taskService = TaskService(coroutineRunner, categoryService, speedMeter, fileWatcher)
     runtimeStatusService = RuntimeStatusService(coroutineRunner)
     featureService = FeatureService(taskService, categoryService, coroutineRunner, runtimeStatusService)
-    aria2RpcServer = Aria2RpcServer(coroutineRunner, parse=featureService.parse, addTask=taskService.add)
     updateService = UpdateService(coroutineRunner)
 
-    return featureService, taskService, aria2RpcServer, updateService, runtimeStatusService
+    return featureService, taskService, updateService, runtimeStatusService
 
 
 def loadPacks(featureService, coroutineRunner, speedMeter):
@@ -105,11 +103,10 @@ def checkUpdateAtStartup(updateService):
     updateService.check()
 
 
-def stopEngine(taskService, aria2RpcServer, featureService, coroutineRunner, speedMeter, updateService=None):
+def stopEngine(taskService, featureService, coroutineRunner, speedMeter, updateService=None):
     taskService.stop()
     taskService.flush()
     speedMeter.stop()
-    aria2RpcServer.stop()
     featureService.deactivate()
     taskService.flush()
     if updateService is not None:

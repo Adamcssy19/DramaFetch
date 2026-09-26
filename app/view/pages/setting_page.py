@@ -18,12 +18,11 @@ from app.platform.android import IS_ANDROID
 from app.config.constants import (
     AUTHOR, AUTHOR_URL, FEEDBACK_URL, VERSION, YEAR,
 )
-from app.view.components.category_settings import CategoryRulesCard
 from app.view.components.setting_card_group import (
     CollapsibleSettingCard, CollapsibleSettingCardGroup, QWIDGETSIZE_MAX,
 )
 from app.view.components.setting_cards import (
-    HeadersPresetSettingCard, IdentitySettingCard, LineEditSettingCard,
+    HeadersPresetSettingCard, IdentitySettingCard,
     PercentSpinBoxSettingCard, ProxySettingCard, SpinBoxSettingCard,
 )
 from app.view.components.editors import FolderPicker
@@ -43,10 +42,6 @@ class SettingPage(ScrollArea):
         self.vBoxLayout.addStretch(1)
 
         self.generalGroup = CollapsibleSettingCardGroup(self.tr("综合下载设置"), "general", self.container)
-        self.categoryGroup = CollapsibleSettingCardGroup(self.tr("下载分类"), "category", self.container)
-        if sys.platform != "darwin":
-            self.associationGroup = CollapsibleSettingCardGroup(self.tr("关联设置"), "association", self.container)
-        self.aria2RpcGroup = CollapsibleSettingCardGroup(self.tr("Aria2 RPC 兼容"), "aria2rpc", self.container)
         self.personalGroup = CollapsibleSettingCardGroup(self.tr("个性化"), "personalization", self.container)
         self.softwareGroup = CollapsibleSettingCardGroup(self.tr("应用"), "software", self.container)
         self.aboutGroup = CollapsibleSettingCardGroup(self.tr("关于"), "about", self.container)
@@ -117,70 +112,6 @@ class SettingPage(ScrollArea):
             ProxySettingCard(cfg.proxyServer, featureService=self._featureService),
             self.clientProfileCard,
             HeadersPresetSettingCard(),
-        ])
-
-        self.categoryRulesCard = CategoryRulesCard(self._categoryService)
-        self.categoryGroup.addSettingCards([
-            SwitchSettingCard(FluentIcon.TAG, self.tr("启用下载分类"),
-                              self.tr("根据扩展名将下载任务归类，便于筛选与分发到指定文件夹"),
-                              cfg.isCategoryEnabled),
-            self.categoryRulesCard,
-        ])
-
-        if sys.platform != "darwin":
-            self.urlSchemeCard = SwitchSettingCard(
-                FluentIcon.LINK, self.tr("允许链接唤起"),
-                self.tr("允许通过 dramafetch:// 协议启动桌面端"),
-                cfg.isUrlSchemeRegistered,
-            )
-            associationCards = [self.urlSchemeCard]
-            for pack in self._featureService.packs:
-                if pack.config is None:
-                    continue
-                fileTypes = pack.fileTypes()
-                if fileTypes and pack.config.associateFileTypes is not None:
-                    extensions = "/".join(ext for ft in fileTypes for ext in ft.extensions)
-                    associationCards.append(SwitchSettingCard(
-                        FluentIcon.DOCUMENT, self.tr("关联 {0} 文件").format(extensions),
-                        self.tr("双击 {0} 文件时用 DramaFetch 打开").format(extensions),
-                        pack.config.associateFileTypes,
-                    ))
-                schemes = pack.uriSchemes()
-                if schemes and pack.config.associateUriSchemes is not None:
-                    schemeText = "/".join(s.displayName for s in schemes)
-                    associationCards.append(SwitchSettingCard(
-                        FluentIcon.LINK, self.tr("处理 {0} 链接").format(schemeText),
-                        self.tr("点击 {0} 链接时唤起 DramaFetch").format(schemeText),
-                        pack.config.associateUriSchemes,
-                    ))
-            self.associationGroup.addSettingCards(associationCards)
-
-        self.aria2RpcGroup.addSettingCards([
-            SwitchSettingCard(
-                FluentIcon.LINK, self.tr("启用 Aria2 RPC 兼容"),
-                self.tr("兼容 Aria2 JSON-RPC 协议，可接收外部工具发送的下载链接"),
-                cfg.isAria2RpcEnabled,
-            ),
-            SpinBoxSettingCard(
-                FluentIcon.GLOBE, self.tr("监听端口"),
-                self.tr("Aria2 RPC 默认端口为 16800"),
-                configItem=cfg.aria2RpcPort, singleStep=1, division=1,
-            ),
-            LineEditSettingCard(
-                FluentIcon.FINGERPRINT, self.tr("令牌"),
-                self.tr("若设置，客户端需传入 token 才可创建任务"),
-                configItem=cfg.aria2RpcToken,
-                placeholder=self.tr("可选"),
-                isPassword=True,
-            ),
-            SwitchSettingCard(
-                FluentIcon.VPN, self.tr("模拟浏览器指纹"),
-                self.tr("为通过 Aria2 RPC 接收的任务附加浏览器 TLS 指纹与请求头"),
-                cfg.aria2RpcEmulateFingerprint,
-            ),
-            SwitchSettingCard(FluentIcon.CHAT, self.tr("接管下载时进入草稿模式"),
-                              self.tr("自动接管外部下载时先进入草稿，方便您调整下载路径和文件名"),
-                              cfg.shouldDraftTakenDownload),
         ])
 
         self.zoomCard = PercentSpinBoxSettingCard(
@@ -309,10 +240,6 @@ class SettingPage(ScrollArea):
 
     def _initLayout(self) -> None:
         self.addSettingGroup(self.generalGroup)
-        self.addSettingGroup(self.categoryGroup)
-        if sys.platform != "darwin":
-            self.addSettingGroup(self.associationGroup)
-        self.addSettingGroup(self.aria2RpcGroup)
         self.addSettingGroup(self.personalGroup)
         self.addSettingGroup(self.softwareGroup)
         for group in self._featureService.settingGroups(self.container):
@@ -330,8 +257,6 @@ class SettingPage(ScrollArea):
                      cfg.set(cfg.downloadFolder, cfg.downloadFolder.defaultValue))
         )
 
-        if sys.platform != "darwin":
-            self.urlSchemeCard.checkedChanged.connect(self._onUrlSchemeChanged)
         self.autoRunCard.checkedChanged.connect(self._onRunAtLoginChanged)
         self.packInfoCard.clicked.connect(self._onPackInfoClicked)
         self.aboutCard.clicked.connect(self._onAboutCardClicked)
@@ -346,13 +271,6 @@ class SettingPage(ScrollArea):
 
     def _showRestartTooltip(self) -> None:
         InfoBar.success(self.tr("已配置"), self.tr("重启软件后生效"), duration=1500, parent=self)
-
-    def _onUrlSchemeChanged(self, enabled: bool) -> None:
-        from app.platform.url_scheme import registerUrlScheme, unregisterUrlScheme
-        if enabled:
-            registerUrlScheme()
-        else:
-            unregisterUrlScheme()
 
     def _onRunAtLoginChanged(self, enabled: bool) -> None:
         from app.platform.run_at_login import setRunAtLogin

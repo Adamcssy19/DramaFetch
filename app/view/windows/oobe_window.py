@@ -441,11 +441,6 @@ class AdvancedOptionsPage(QWidget):
             self.fileAssocCard = None
             self.uriSchemeCard = None
             self.urlSchemeCard = None
-        self.aria2Card = OptionCard(
-            FluentIcon.COMMAND_PROMPT, self.tr("Aria2 RPC 兼容"),
-            self.tr("让支持 Aria2 的工具和网站把下载任务发给 DramaFetch"),
-            isChecked=cfg.isAria2RpcEnabled.value, parent=self,
-        )
 
     def _initLayout(self) -> None:
         layout = QVBoxLayout(self)
@@ -457,7 +452,7 @@ class AdvancedOptionsPage(QWidget):
         listLayout = QVBoxLayout()
         listLayout.setSpacing(8)
         for card in [self.runAtLoginCard, self.clipboardCard, self.categoryCard,
-                     self.fileAssocCard, self.uriSchemeCard, self.urlSchemeCard, self.aria2Card]:
+                     self.fileAssocCard, self.uriSchemeCard, self.urlSchemeCard]:
             if card is not None:
                 listLayout.addWidget(card)
         layout.addLayout(listLayout)
@@ -488,8 +483,6 @@ class AdvancedOptionsPage(QWidget):
             else:
                 unregisterUrlScheme()
             cfg.set(cfg.isUrlSchemeRegistered, self.urlSchemeCard.isChecked())
-
-        cfg.set(cfg.isAria2RpcEnabled, self.aria2Card.isChecked())
 
 
 class CompletePage(QWidget):
