@@ -1,0 +1,8 @@
+# 所有文本文件在检出时保持 LF，避免定制脚本里的匹配文本因换行不一致而失效
+* text=auto eol=lf
+
+# 二进制文件不做换行转换
+*.ico binary
+*.png binary
+*.exe binary
+*.zip binary

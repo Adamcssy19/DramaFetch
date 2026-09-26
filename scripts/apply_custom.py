@@ -39,6 +39,15 @@ def write(path, text):
     path.write_text(text, encoding='utf-8', newline='\n')
 
 
+def read(path):
+    """按 UTF-8 读取，并把换行统一成 \\n。
+
+    仓库在 Windows 上检出时可能是 CRLF，而脚本里的匹配文本都是按 \\n 写的，
+    不统一换行就会匹配不上。
+    """
+    return path.read_text(encoding='utf-8').replace('\r\n', '\n')
+
+
 def replace_text(relative, old, new, required=True, note='', marker=None, remove=False):
     """在 upstream/guoapp 下的某个文件里做定点替换。
 
@@ -54,7 +63,7 @@ def replace_text(relative, old, new, required=True, note='', marker=None, remove
     if not path.is_file():
         (errors if required else warnings).append(f'{relative} 不存在（{note}）')
         return
-    text = path.read_text(encoding='utf-8')
+    text = read(path)
     if marker and marker in text:
         return
     if old not in text:
@@ -72,12 +81,12 @@ def apply_project_version():
     if not version_file.is_file():
         errors.append('缺少 version.txt')
         return
-    version = version_file.read_text(encoding='utf-8').strip()
+    version = read(version_file).strip()
     if not version:
         errors.append('version.txt 内容为空')
         return
     target = upstream / 'pubspec.yaml'
-    text = target.read_text(encoding='utf-8')
+    text = read(target)
     updated, count = re.subn(r'^version:\s*\S+\s*$', f'version: {version}', text, count=1, flags=re.MULTILINE)
     if count != 1:
         errors.append('pubspec.yaml 里找不到版本号')
@@ -90,7 +99,7 @@ def apply_project_version():
     # 否则应用内「检查更新」会拿上游的版本号去和发布页比较。
     layout = upstream / 'lib' / 'app_layout.dart'
     if layout.is_file():
-        layout_text = layout.read_text(encoding='utf-8')
+        layout_text = read(layout)
         layout_updated, layout_count = re.subn(
             r"^const appVersion = '[^']*';\s*$",
             f"const appVersion = '{version}';",
