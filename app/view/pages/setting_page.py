@@ -22,7 +22,6 @@ from app.view.components.setting_card_group import (
     CollapsibleSettingCard, CollapsibleSettingCardGroup, QWIDGETSIZE_MAX,
 )
 from app.view.components.setting_cards import (
-    HeadersPresetSettingCard, IdentitySettingCard,
     PercentSpinBoxSettingCard, ProxySettingCard, SpinBoxSettingCard,
 )
 from app.view.components.editors import FolderPicker
@@ -85,7 +84,6 @@ class SettingPage(ScrollArea):
         self.downloadFolderCard.hBoxLayout.addSpacing(8)
         self.downloadFolderCard.hBoxLayout.addWidget(self.downloadRestoreButton, 0, Qt.AlignmentFlag.AlignRight)
         self.downloadFolderCard.hBoxLayout.addSpacing(16)
-        self.clientProfileCard = IdentitySettingCard()
 
         self.generalGroup.addSettingCards([
             RangeSettingCard(cfg.maxTaskNum, FluentIcon.TRAIN, self.tr("最大任务数"),
@@ -110,8 +108,6 @@ class SettingPage(ScrollArea):
                               self.tr("使用操作系统的 DNS 解析，兼容 TUN、VPN 和代理等网络环境"),
                               cfg.shouldUseSystemDns),
             ProxySettingCard(cfg.proxyServer, featureService=self._featureService),
-            self.clientProfileCard,
-            HeadersPresetSettingCard(),
         ])
 
         self.zoomCard = PercentSpinBoxSettingCard(
