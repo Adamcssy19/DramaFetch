@@ -273,7 +273,8 @@ class MainWindow(MSFluentWindow):
         )
 
     def _onUpdateAvailable(self, info) -> None:
-        from qfluentwidgets import PrimaryPushButton, PushButton
+        from qfluentwidgets import ComboBox, PrimaryPushButton, PushButton
+        from app.sources import MIRROR_LABELS, mirrorLatencies, setPreferredMirror
 
         if self._progressToast is not None:
             self._progressToast.deleteLater()
@@ -298,6 +299,18 @@ class MainWindow(MSFluentWindow):
         detailButton = PushButton(FluentIcon.CHAT, self.tr("查看详情"))
         detailButton.clicked.connect(self._showReleaseDetails)
         infoBar.addWidget(detailButton)
+
+        # 加速源选择：默认自动测速，也可手动指定
+        sourceBox = ComboBox(infoBar)
+        for name, label in MIRROR_LABELS.items():
+            latency = mirrorLatencies.get(name)
+            text = f"{label} ({latency:.2f}s)" if latency is not None else label
+            sourceBox.addItem(text, userData=name)
+        sourceBox.setCurrentIndex(0)
+        sourceBox.currentIndexChanged.connect(
+            lambda _: setPreferredMirror(sourceBox.currentData()))
+        sourceBox.setFixedWidth(150)
+        infoBar.addWidget(sourceBox)
         infoBar.show()
 
     def _downloadBestAsset(self) -> None:

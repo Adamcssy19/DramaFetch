@@ -214,6 +214,87 @@ async def probeDownloadUrl(repo: Repo, tag: str, asset: str) -> str:
     return result
 
 
+# ── GitHub 加速镜像：对 release 资产直链做前缀代理 ──
+
+MIRROR_PREFIXES: dict[str, str] = {
+    "github": "",                          # 官方直连
+    "ghfast": "https://ghfast.top/",
+    "gh-proxy": "https://gh-proxy.com/",
+    "moeyy": "https://github.moeyy.xyz/",
+    "llkk": "https://gh.llkk.cc/",
+}
+MIRROR_LABELS: dict[str, str] = {
+    "auto": "自动测速",
+    "github": "GitHub 直连",
+    "ghfast": "ghfast.top",
+    "gh-proxy": "gh-proxy.com",
+    "moeyy": "github.moeyy.xyz",
+    "llkk": "gh.llkk.cc",
+}
+
+# 模块级偏好与最近一次测速结果（供 UI 展示与手动换源）
+preferredMirror: str = "auto"
+mirrorLatencies: dict[str, float] = {}
+
+
+def setPreferredMirror(name: str) -> None:
+    global preferredMirror
+    preferredMirror = name if name in MIRROR_PREFIXES else "auto"
+
+
+def buildAssetUrlCandidates(repo: Repo, tag: str, asset: str) -> list[tuple[str, str]]:
+    direct = f"https://github.com/{repo.name}/releases/download/{tag}/{asset}"
+    return [(name, f"{prefix}{direct}" if prefix else direct)
+            for name, prefix in MIRROR_PREFIXES.items()]
+
+
+async def probeMirrorUrl(url: str, timeout: float = 6.0) -> float | None:
+    """HEAD 式探测（Range 0-0），返回耗时秒数；失败返回 None。"""
+    import time
+    start = time.perf_counter()
+    client = buildClient(headers={"Range": "bytes=0-0"}, timeout=int(timeout))
+    try:
+        resp = await client.get(url)
+        try:
+            resp.raise_for_status()
+            return time.perf_counter() - start
+        finally:
+            resp.close()
+    except Exception as e:
+        logger.debug("镜像测速失败 {}: {}", url, repr(e))
+        return None
+    finally:
+        client.close()
+
+
+async def probeDownloadUrl(repo: Repo, tag: str, asset: str) -> str:
+    """在直连与各加速镜像中探测资产可用性，自动选择延迟最低的源。"""
+    candidates = buildAssetUrlCandidates(repo, tag, asset)
+
+    global preferredMirror
+    if preferredMirror != "auto":
+        byName = dict(candidates)
+        if preferredMirror in byName:
+            return byName[preferredMirror]
+
+    latencies = await asyncio.gather(
+        *[probeMirrorUrl(url) for _, url in candidates])
+    ranked = sorted(
+        (delay, name, url)
+        for (name, url), delay in zip(candidates, latencies)
+        if delay is not None)
+    mirrorLatencies.clear()
+    mirrorLatencies.update(
+        {name: delay for (name, _url), delay in zip(candidates, latencies)
+         if delay is not None})
+    if not ranked:
+        raise TaskError("无法下载 {name}/{tag}/{asset}", name=repo.name, tag=tag, asset=asset)
+    logger.info("加速源测速：{} 选中 {} ({:.2f}s)",
+                ", ".join(f"{n}={d:.2f}s" for d, n, _ in ranked),
+                ranked[0][1], ranked[0][0])
+    return ranked[0][2]
+
+
 async def fetchReleaseAsset(
     repo: Repo, tag: str, asset: str, outputPath: Path,
     onProgress: Callable[[float], None] | None = None,
