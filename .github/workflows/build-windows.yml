@@ -27,6 +27,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 上游源码不入库，先拉下来，后面的环境准备与构建都依赖它
+      - name: 拉取上游源码
+        run: python scripts/fetch_upstream.py
+
       - name: 准备 Go 环境
         uses: actions/setup-go@v5
         with:
@@ -81,9 +85,6 @@ jobs:
             }
           }
           Write-Warning '中文语言文件全部下载失败，安装器改用英文界面'
-
-      - name: 拉取上游源码
-        run: python scripts/fetch_upstream.py
 
       - name: 应用定制
         run: python scripts/apply_custom.py
