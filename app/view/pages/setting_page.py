@@ -188,15 +188,6 @@ class SettingPage(ScrollArea):
                               cfg.shouldCheckUpdateAtStartup),
             self.autoRunCard,
         ]
-        if not IS_ANDROID:
-            softwareCards.append(
-                ComboBoxSettingCard(
-                    cfg.closeMode, FluentIcon.POWER_BUTTON,
-                    self.tr("关闭主窗口时"),
-                    self.tr("设置关闭主窗口后程序继续在后台运行还是退出"),
-                    texts=[self.tr("关闭时询问"), self.tr("继续在后台运行"), self.tr("退出程序")],
-                ),
-            )
         softwareCards.append(
             SwitchSettingCard(FluentIcon.PASTE, self.tr("剪贴板监听"),
                               self.tr("剪贴板监听器将自动检测剪贴板中的链接并添加下载任务"),

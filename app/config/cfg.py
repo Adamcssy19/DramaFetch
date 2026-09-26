@@ -61,12 +61,6 @@ LANGUAGE_TEXTS = {
 }
 
 
-class CloseMode(Enum):
-    ASK = "Ask"
-    BACKGROUND = "Background"
-    QUIT = "Quit"
-
-
 class ProxyValidator(ConfigValidator):
     PATTERN = compile(
         r"^"
@@ -290,10 +284,6 @@ class Config(QConfig):
     # 软件
     shouldCheckUpdateAtStartup = ConfigItem("Software", "CheckUpdateAtStartUp", True, BoolValidator())
     shouldRunAtLogin = ConfigItem("Software", "AutoRun", False, BoolValidator())
-    closeMode = OptionsConfigItem(
-        "Software", "CloseMode", CloseMode.ASK,
-        OptionsValidator(CloseMode), EnumSerializer(CloseMode),
-    )
     isClipboardListenerEnabled = ConfigItem("Software", "ClipboardListener", True, BoolValidator())
     geometry = ConfigItem(
         "Software", "Geometry", (0, 0, 0, 0), serializer=GeometrySerializer(),

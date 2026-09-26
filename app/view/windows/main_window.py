@@ -13,7 +13,7 @@ from qfluentwidgets import (
 )
 from qfluentwidgets.components.dialog_box.mask_dialog_base import MaskDialogBase
 
-from app.config.cfg import CloseMode, cfg
+from app.config.cfg import cfg
 from app.config.constants import FEEDBACK_URL
 from app.services.task_draft import TaskDraft
 from app.signal_bus import signalBus
@@ -401,33 +401,17 @@ class MainWindow(MSFluentWindow):
             QTimer.singleShot(1000, self._onCloseClicked)
             return
 
-        mode = cfg.closeMode.value
-
-        if sys.platform == "darwin" and mode != CloseMode.QUIT:
+        if sys.platform == "darwin":
+            # macOS 惯例：点红叉仅隐藏窗口，进程随 Cmd+Q 结束
             if not self.isMaximized():
                 geo = self.geometry()
                 cfg.set(cfg.geometry, (geo.x(), geo.y(), geo.width(), geo.height()))
             self.hide()
             return
 
-        if mode == CloseMode.ASK:
-            from qfluentwidgets import CheckBox
-            dialog = MessageBox(
-                self.tr("是否完全退出程序？"),
-                self.tr("后台运行时可通过系统托盘图标重新打开。"),
-                self,
-            )
-            dialog.yesButton.setText(self.tr("退出程序"))
-            dialog.cancelButton.setText(self.tr("继续在后台运行"))
-            checkbox = CheckBox(self.tr("记住我的选择"), dialog)
-            dialog.textLayout.addWidget(checkbox)
-            mode = CloseMode.QUIT if dialog.exec() else CloseMode.BACKGROUND
-            if checkbox.isChecked():
-                cfg.set(cfg.closeMode, mode)
-
+        # Windows / Linux：关窗即彻底退出，不驻留后台
         self.close()
-        if mode == CloseMode.QUIT:
-            QApplication.quit()
+        QApplication.quit()
 
     def dragEnterEvent(self, event) -> None:
         if QApplication.instance().isFileDragActive:
