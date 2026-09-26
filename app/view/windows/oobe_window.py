@@ -18,7 +18,7 @@ from qfluentwidgets import (
 )
 from qfluentwidgets.common.style_sheet import updateStyleSheet
 
-from app.config.cfg import cfg, LANGUAGE_TEXTS
+from app.config.cfg import cfg
 
 if sys.platform == "win32":
     from ctypes import cast, POINTER
@@ -240,8 +240,6 @@ class WelcomePage(QWidget):
 
 class BasicSettingsPage(QWidget):
 
-    languageChanged = Signal()
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self._initWidget()
@@ -263,12 +261,6 @@ class BasicSettingsPage(QWidget):
 
         self.settingsCard = GroupHeaderCardWidget(self.tr("偏好"), self)
 
-        self.langCombo = ComboBox(self)
-        self.langCombo.setMinimumWidth(200)
-        for lang in cfg.language.options:
-            self.langCombo.addItem(LANGUAGE_TEXTS.get(lang, self.tr("使用系统设置")))
-        self.langCombo.setCurrentIndex(cfg.language.options.index(cfg.language.value))
-
         self.browseButton = PushButton(self.tr("浏览..."), self)
 
     def _initLayout(self) -> None:
@@ -285,10 +277,6 @@ class BasicSettingsPage(QWidget):
         layout.addLayout(themeRow)
         layout.addStretch(1)
 
-        self.settingsCard.addGroup(
-            FluentIcon.LANGUAGE, self.tr("界面语言"),
-            self.tr("更改立即生效"), self.langCombo,
-        )
         self._folderGroup = self.settingsCard.addGroup(
             FluentIcon.FOLDER, self.tr("下载保存位置"),
             str(cfg.downloadFolder.value), self.browseButton,
@@ -299,7 +287,6 @@ class BasicSettingsPage(QWidget):
     def _bind(self) -> None:
         for card in self._themeCards:
             card.clicked.connect(lambda t=card.theme: self._onThemePicked(t))
-        self.langCombo.currentIndexChanged.connect(self._onLanguageChanged)
         self.browseButton.clicked.connect(self._onBrowseClicked)
 
     def _onThemePicked(self, theme: Theme) -> None:
@@ -312,12 +299,6 @@ class BasicSettingsPage(QWidget):
         current = cfg.themeMode.value
         for card in self._themeCards:
             card.setSelected(card.theme == current)
-
-    def _onLanguageChanged(self, index: int) -> None:
-        options = cfg.language.options
-        if 0 <= index < len(options) and options[index] != cfg.language.value:
-            cfg.set(cfg.language, options[index])
-            self.languageChanged.emit()
 
     def _onBrowseClicked(self) -> None:
         folder = QFileDialog.getExistingDirectory(
@@ -613,28 +594,10 @@ class OobeWindow(FluentWidget):
 
     def _bind(self) -> None:
         self.welcomePage.startClicked.connect(self._onNextClicked)
-        self.basicSettingsPage.languageChanged.connect(self._rebuildContent)
         self.completePage.finishClicked.connect(self._finish)
         self.backButton.clicked.connect(self._onBackClicked)
         self.nextButton.clicked.connect(self._onNextClicked)
         self.skipButton.clicked.connect(self._finish)
-
-    def _rebuildContent(self) -> None:
-        index = self._currentIndex
-        for widget in [self.stackedWidget, self.backButton,
-                       self.skipButton, self.nextButton, self.pipsPager]:
-            widget.hide()
-            widget.deleteLater()
-        QWidget().setLayout(self.layout())
-
-        self._initContent()
-        self._initLayout()
-        self._bind()
-        self._currentIndex = index
-        self.stackedWidget.setAnimationEnabled(False)
-        self.stackedWidget.setCurrentIndex(index)
-        self.stackedWidget.setAnimationEnabled(True)
-        self._refreshNavigation()
 
     def _refreshNavigation(self) -> None:
         i = self._currentIndex

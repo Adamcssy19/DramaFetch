@@ -5,7 +5,6 @@ import platform
 import sys
 from pathlib import Path
 
-from app.i18n import N
 
 from app.config.cfg import ConfigItem
 from app.config.paths import APP_DATA_DIR
@@ -59,8 +58,8 @@ ffmpegConfig = FFmpegConfig()
 class FFmpegRuntime(BinaryRuntime):
     name = "FFmpeg"
     canInstall = not IS_ANDROID
-    title = N("BinaryRuntime", "视频合并")
-    description = N("BinaryRuntime", "哔哩哔哩、YouTube 等网站视频下载必备，合并音视频轨道为完整文件")
+    title = "视频合并"
+    description = "哔哩哔哩、YouTube 等网站视频下载必备，合并音视频轨道为完整文件"
     icon = "VIDEO"
     isRecommended = True
 

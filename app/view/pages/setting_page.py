@@ -13,7 +13,7 @@ from qfluentwidgets import (
 
 from app.view.components.scroll_area import ScrollArea
 
-from app.config.cfg import cfg, LANGUAGE_TEXTS
+from app.config.cfg import cfg
 from app.platform.android import IS_ANDROID
 from app.config.constants import (
     AUTHOR, AUTHOR_URL, FEEDBACK_URL, VERSION, YEAR,
@@ -155,12 +155,6 @@ class SettingPage(ScrollArea):
                                   self.tr("下载时在菜单栏图标旁显示当前速度"),
                                   cfg.shouldShowMenuBarSpeed),
             ])
-        personalCards.append(
-            ComboBoxSettingCard(cfg.language, FluentIcon.LANGUAGE, self.tr("语言"),
-                                self.tr("设置界面的首选语言"),
-                                texts=[LANGUAGE_TEXTS.get(lang, self.tr("使用系统设置"))
-                                       for lang in cfg.language.options]),
-        )
         self.personalGroup.addSettingCards(personalCards)
 
         self.autoRunCard = SwitchSettingCard(

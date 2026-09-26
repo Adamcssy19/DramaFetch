@@ -13,7 +13,6 @@ from app.config.cfg import (
     RangeConfigItem,
     RangeValidator,
 )
-from app.i18n import N
 
 from app.config.paths import APP_DATA_DIR
 from app.install import createInstallTask
@@ -144,8 +143,8 @@ class M3U8Runtime(BinaryRuntime):
     name = "N_m3u8DL-RE"
     binaryName = "N_m3u8DL-RE"
     canInstall = not IS_ANDROID
-    title = N("BinaryRuntime", "M3U8 / 直播下载")
-    description = N("BinaryRuntime", "支持 HLS、DASH 等流媒体协议，可录制直播流")
+    title = "M3U8 / 直播下载"
+    description = "支持 HLS、DASH 等流媒体协议，可录制直播流"
     icon = "MEDIA"
     isRecommended = True
 

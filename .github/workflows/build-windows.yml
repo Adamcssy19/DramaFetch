@@ -72,7 +72,7 @@ jobs:
         shell: pwsh
         run: |
           echo "VERSION=${{ needs.prepare.outputs.version }}" >> $env:GITHUB_ENV
-          (Get-Content scripts/Ghost-Downloader-3.iss) -replace 'APPLICATION_VERSION', '${{ needs.prepare.outputs.version }}' | Set-Content scripts/Ghost-Downloader-3.iss
+          (Get-Content scripts/DramaFetch.iss) -replace 'APPLICATION_VERSION', '${{ needs.prepare.outputs.version }}' | Set-Content scripts/DramaFetch.iss
           uv run scripts/deploy.py
 
       - name: Build updater
@@ -86,7 +86,7 @@ jobs:
         if: ${{ github.event.inputs.create_release == 'true' }}
         shell: pwsh
         run: |
-          $langs = @("ChineseSimplified", "ChineseTraditional")
+          $langs = @("ChineseSimplified")
           foreach ($lang in $langs) {
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/${lang}.isl" -OutFile "C:\Program Files (x86)\Inno Setup 6\Languages\${lang}.isl"
           }
@@ -95,7 +95,7 @@ jobs:
         if: ${{ github.event.inputs.create_release == 'true' }}
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.8
         with:
-          path: scripts/Ghost-Downloader-3.iss
+          path: scripts/DramaFetch.iss
 
       - name: Package portable zip
         if: ${{ github.event.inputs.create_release == 'true' }}

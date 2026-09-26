@@ -2,24 +2,6 @@
 from __future__ import annotations
 
 
-def loadTranslators(application):
-    from PySide6.QtCore import QLocale, QTranslator
-    from app.config.cfg import cfg
-
-    translator = QTranslator(application)
-
-    def setLocale():
-        localeName = cfg.language.value.value
-        locale = QLocale() if localeName == "Auto" else QLocale(localeName)
-        application.removeTranslator(translator)
-        if locale.name() != "zh_CN":
-            if translator.load(locale, "gd3", ".", ":/i18n") or translator.load("gd3.en_US", ":/i18n"):
-                application.installTranslator(translator)
-
-    setLocale()
-    cfg.language.valueChanged.connect(setLocale)
-
-
 def loadEngine(application):
     import sys
     from app.services.category_service import CategoryService
@@ -31,8 +13,6 @@ def loadEngine(application):
     from app.config.paths import EXECUTABLE_DIR
 
     QResource.registerResource(str(EXECUTABLE_DIR / "app" / "assets" / "resources.rcc"))
-
-    loadTranslators(application)
 
     if sys.platform == "win32":
         from winloop import new_event_loop

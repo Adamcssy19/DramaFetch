@@ -30,7 +30,6 @@ ArchitecturesAllowed=x64compatible
 ; the 64-bit view of the registry.
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
-LicenseFile=LICENSE
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=dist
@@ -40,13 +39,7 @@ SolidCompression=yes
 WizardStyle=modern
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
-Name: "chinesetraditional"; MessagesFile: "compiler:Languages\ChineseTraditional.isl"
-Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
-Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
-Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -61,26 +54,17 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
-; Uninstall-time cleanup of the per-user assoc keys written at runtime; dontcreatekey writes nothing at install
-Root: HKCU; Subkey: "Software\Classes\GhostDownloader.m3u8"; Flags: dontcreatekey uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\GhostDownloader.m3u"; Flags: dontcreatekey uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\GhostDownloader.mpd"; Flags: dontcreatekey uninsdeletekey
+; 卸载时清理运行期写入的每用户关联键与 URI scheme
 Root: HKCU; Subkey: "Software\Classes\DramaFetch.m3u8"; Flags: dontcreatekey uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\DramaFetch.m3u"; Flags: dontcreatekey uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\DramaFetch.mpd"; Flags: dontcreatekey uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\.m3u8\OpenWithProgids"; ValueType: none; ValueName: "GhostDownloader.m3u8"; Flags: dontcreatekey uninsdeletevalue
-Root: HKCU; Subkey: "Software\Classes\.m3u\OpenWithProgids"; ValueType: none; ValueName: "GhostDownloader.m3u"; Flags: dontcreatekey uninsdeletevalue
-Root: HKCU; Subkey: "Software\Classes\.mpd\OpenWithProgids"; ValueType: none; ValueName: "GhostDownloader.mpd"; Flags: dontcreatekey uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\.m3u8\OpenWithProgids"; ValueType: none; ValueName: "DramaFetch.m3u8"; Flags: dontcreatekey uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\.m3u\OpenWithProgids"; ValueType: none; ValueName: "DramaFetch.m3u"; Flags: dontcreatekey uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\.mpd\OpenWithProgids"; ValueType: none; ValueName: "DramaFetch.mpd"; Flags: dontcreatekey uninsdeletevalue
-; URI scheme handlers registered at runtime
-Root: HKCU; Subkey: "Software\Classes\ghostdownloader"; Flags: dontcreatekey uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\dramafetch"; Flags: dontcreatekey uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\drama"; Flags: dontcreatekey uninsdeletekey
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{localappdata}\GhostDownloader"
 Type: filesandordirs; Name: "{localappdata}\DramaFetch"
 
 [Run]
