@@ -539,7 +539,7 @@ def main():
         "                          key: ValueKey('saved-tab-$_tab'),\n"
         '                          repository: widget.repository,\n'
         '                          store: widget.store,\n'
-        '                          history: true,\n'
+        '                          history: _tab == 2,\n'
         '                          onOpen: _openDrama,\n'
         '                          onContinue: (drama) =>\n'
         '                              _openDrama(drama, resume: true),\n'
