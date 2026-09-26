@@ -12,6 +12,7 @@ import json
 import shutil
 import sys
 import tarfile
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -61,7 +62,11 @@ def main():
             raise SystemExit('上游压缩包为空')
 
         if target.exists():
-            shutil.rmtree(target)
+            # 先把旧目录挪到系统临时目录再删：避免在项目目录里做大批量删除
+            stale = Path(tempfile.mkdtemp(prefix='dramafetch-upstream-')) / 'stale'
+            shutil.move(str(target), str(stale))
+            if stale.exists():
+                shutil.rmtree(stale, ignore_errors=True)
         target.mkdir(parents=True, exist_ok=True)
         for member in members:
             # 去掉压缩包自带的顶层目录，例如 guoapp-main/

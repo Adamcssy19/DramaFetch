@@ -364,7 +364,8 @@ def main():
         '                        selectedIcon: Icon(Icons.search),\n'
         "                        label: Text('搜索'),\n"
         '                      ),\n',
-        marker="label: Text('搜索'),",
+        # 侧边栏整体已被换成自绘导航时，这条改动包含在其中，直接跳过
+        marker='DramaFetchNav(',
         note='导航去掉追剧',
     )
 
@@ -522,7 +523,8 @@ def main():
         "                        label: Text('设置'),\n"
         '                      ),\n'
         '                    ],\n',
-        marker="label: Text('榜单'),",
+        # 同上：整段已被自绘导航取代时无需再改这里的四项
+        marker='DramaFetchNav(',
         note='侧边栏四项',
     )
 
@@ -569,6 +571,125 @@ def main():
         '                        ),\n',
         marker='initialGroup: widget.store.sources.isEmpty',
         note='页面切换四项',
+    )
+
+    # ---- 侧边导航与标题：顶部固定显示软件名 ----
+    replace_text(
+        'lib/home_screen.dart',
+        "import 'dramafetch_home.dart';\n",
+        "import 'dramafetch_home.dart';\nimport 'dramafetch_nav.dart';\n",
+        marker="import 'dramafetch_nav.dart';",
+        note='引入侧边导航组件',
+    )
+
+    # 顶部标题固定显示软件名（原来在多站源时显示的是站源名）
+    replace_text(
+        'lib/home_screen.dart',
+        '                : _tab == 0\n'
+        '                ? PopupMenuButton<SourceGroup>(\n'
+        "                    key: const ValueKey('source-switch'),\n"
+        "                    tooltip: '切换站源',\n"
+        '                    enabled: _sourceGroups.length > 1,\n'
+        '                    onSelected: _changeGroup,\n'
+        '                    itemBuilder: (_) => [\n'
+        '                      for (final group in _sourceGroups)\n'
+        '                        PopupMenuItem(\n'
+        '                          value: group,\n'
+        '                          child: Row(\n'
+        '                            children: [\n'
+        '                              Expanded(child: Text(group.name)),\n'
+        '                              if (group.id == _group.id)\n'
+        '                                const Icon(Icons.check_rounded, size: 20),\n'
+        '                            ],\n'
+        '                          ),\n'
+        '                        ),\n'
+        '                    ],\n'
+        '                    child: SizedBox(\n'
+        '                      height: 48,\n'
+        '                      child: Row(\n'
+        '                        mainAxisSize: MainAxisSize.min,\n'
+        '                        children: [\n'
+        '                          Flexible(\n'
+        '                            child: Text(\n'
+        '                              _group.name,\n'
+        '                              overflow: TextOverflow.ellipsis,\n'
+        '                              style: const TextStyle(\n'
+        '                                fontWeight: FontWeight.w800,\n'
+        '                              ),\n'
+        '                            ),\n'
+        '                          ),\n'
+        '                          if (_sourceGroups.length > 1)\n'
+        '                            const Icon(Icons.expand_more_rounded),\n'
+        '                        ],\n'
+        '                      ),\n'
+        '                    ),\n'
+        '                  )\n'
+        '                : const Text(appName),\n',
+        '                : const Text(appName),\n',
+        remove=True,
+        note='标题固定为软件名',
+    )
+
+    # 侧边栏换成 Windows 11 风格的导航，顶部是应用图标与名称
+    replace_text(
+        'lib/home_screen.dart',
+        '                  NavigationRail(\n'
+        '                    selectedIndex: _tab,\n'
+        '                    onDestinationSelected: _onNavSelected,\n'
+        '                    labelType: NavigationRailLabelType.all,\n'
+        '                    groupAlignment: -.8,\n'
+        '                    destinations: [\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.search_outlined),\n'
+        '                        selectedIcon: Icon(Icons.search),\n'
+        "                        label: Text('搜索'),\n"
+        '                      ),\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.leaderboard_outlined),\n'
+        '                        selectedIcon: Icon(Icons.leaderboard_rounded),\n'
+        "                        label: Text('榜单'),\n"
+        '                      ),\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.download_outlined),\n'
+        '                        selectedIcon: Icon(Icons.download_rounded),\n'
+        "                        label: Text('下载'),\n"
+        '                      ),\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.settings_outlined),\n'
+        '                        selectedIcon: Icon(Icons.settings_rounded),\n'
+        "                        label: Text('设置'),\n"
+        '                      ),\n'
+        '                    ],\n'
+        '                  ),\n',
+        '                  DramaFetchNav(\n'
+        '                    selectedIndex: _tab,\n'
+        '                    onSelected: _onNavSelected,\n'
+        '                    expanded: constraints.maxWidth >= 1100,\n'
+        '                    destinations: const [\n'
+        '                      DramaFetchNavItem(\n'
+        '                        icon: Icons.search_outlined,\n'
+        '                        selectedIcon: Icons.search_rounded,\n'
+        "                        label: '搜索',\n"
+        '                      ),\n'
+        '                      DramaFetchNavItem(\n'
+        '                        icon: Icons.leaderboard_outlined,\n'
+        '                        selectedIcon: Icons.leaderboard_rounded,\n'
+        "                        label: '榜单',\n"
+        '                      ),\n'
+        '                      DramaFetchNavItem(\n'
+        '                        icon: Icons.download_outlined,\n'
+        '                        selectedIcon: Icons.download_rounded,\n'
+        "                        label: '下载',\n"
+        '                      ),\n'
+        '                      DramaFetchNavItem(\n'
+        '                        icon: Icons.settings_outlined,\n'
+        '                        selectedIcon: Icons.settings_rounded,\n'
+        "                        label: '设置',\n"
+        '                      ),\n'
+        '                    ],\n'
+        '                  ),\n',
+        marker='DramaFetchNav(',
+        note='侧边栏换成 Windows 11 风格导航',
     )
 
     # ---- 自动更新：注册更新动作 ----
