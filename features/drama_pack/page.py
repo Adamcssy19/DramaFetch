@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP as N, Qt, Signal
 from PySide6.QtGui import QColor, QPixmap
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from qfluentwidgets import (
     BodyLabel,
@@ -17,7 +17,6 @@ from qfluentwidgets import (
     InfoBarPosition,
     PrimaryPushButton,
     PushButton,
-    PixmapLabel,
     SearchLineEdit,
     StrongBodyLabel,
     TransparentToolButton,
@@ -30,7 +29,10 @@ from app.view.components.scroll_area import ScrollArea as PageScrollArea
 from . import api
 from .picker import EpisodePickerDialog
 
-COVER_WIDTH, COVER_HEIGHT = 96, 128
+CARD_WIDTH = 260
+COVER_WIDTH, COVER_HEIGHT = 232, 130
+GRID_SPACING = 12
+GRID_MARGIN = 16
 
 
 class LoadingState(QWidget):
@@ -81,38 +83,36 @@ class DramaCard(CardWidget):
     def __init__(self, drama: api.Drama, parent=None):
         super().__init__(parent)
         self._drama = drama
-        self.setFixedHeight(150)
+        self.setFixedSize(CARD_WIDTH, 290)
 
-        self._cover = PixmapLabel(self)
+        self._cover = QLabel(self)
         self._cover.setFixedSize(COVER_WIDTH, COVER_HEIGHT)
-        self._cover.setScaledContents(True)
+        self._cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._title = StrongBodyLabel(drama.title, self)
-        self._title.setMaximumWidth(320)
+        self._title.setToolTip(drama.title)
         self._meta = CaptionLabel(self._metaText(), self)
         self._meta.setTextColor(QColor(120, 120, 120), QColor(170, 170, 170))
-        self._intro = BodyLabel(drama.intro or "暂无简介", self)
+        self._intro = BodyLabel(drama.intro or "", self)
         self._intro.setTextColor(QColor(96, 96, 96), QColor(150, 150, 150))
         self._intro.setWordWrap(True)
-        self._intro.setMaximumHeight(56)
+        self._intro.setFixedHeight(40)
+        if drama.intro:
+            self._intro.setToolTip(drama.intro)
 
         self._download = PrimaryPushButton(FluentIcon.DOWNLOAD, "下载", self)
-        self._download.setFixedWidth(96)
+        self._download.setFixedHeight(32)
         self._download.clicked.connect(lambda: self.downloadRequested.emit(self._drama))
 
-        textLayout = QVBoxLayout()
-        textLayout.setSpacing(4)
-        textLayout.addWidget(self._title)
-        textLayout.addWidget(self._meta)
-        textLayout.addWidget(self._intro)
-        textLayout.addStretch(1)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(14)
-        layout.addWidget(self._cover)
-        layout.addLayout(textLayout, 1)
-        layout.addWidget(self._download, 0, Qt.AlignmentFlag.AlignTop)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(6)
+        layout.addWidget(self._cover, 0, Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self._title)
+        layout.addWidget(self._meta)
+        layout.addWidget(self._intro)
+        layout.addStretch(1)
+        layout.addWidget(self._download)
 
     def _metaText(self) -> str:
         parts = [self._drama.category or "短剧"]
@@ -127,7 +127,11 @@ class DramaCard(CardWidget):
     def setCover(self, data: bytes):
         pixmap = QPixmap()
         if pixmap.loadFromData(data):
-            self._cover.setPixmap(pixmap)
+            self._cover.setPixmap(pixmap.scaled(
+                COVER_WIDTH, COVER_HEIGHT,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
 
 
 class DramaPage(PackPage, PageScrollArea):
@@ -152,6 +156,9 @@ class DramaPage(PackPage, PageScrollArea):
 
         self._scrollWidget = QWidget()
         self._layout = QVBoxLayout(self._scrollWidget)
+        self._grid = QGridLayout()
+        self._grid.setSpacing(GRID_SPACING)
+        self._grid.setContentsMargins(0, 0, 0, 0)
         self._state = LoadingState(self._scrollWidget)
 
         self._initTopBar()
@@ -206,9 +213,12 @@ class DramaPage(PackPage, PageScrollArea):
         topBar.addWidget(self._rankBox)
 
         self._layout.setSpacing(10)
-        self._layout.setContentsMargins(16, 16, 16, 16)
+        self._layout.setContentsMargins(GRID_MARGIN, 16, GRID_MARGIN, 16)
         self._layout.addLayout(topBar)
         self._layout.addWidget(self._state, 0, Qt.AlignmentFlag.AlignCenter)
+        self._layout.addLayout(self._grid)
+        self._layout.addWidget(self._moreButton, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._layout.addStretch(1)
 
         self.setWidget(self._scrollWidget)
         self.setWidgetResizable(True)
@@ -219,7 +229,7 @@ class DramaPage(PackPage, PageScrollArea):
 
     def _clearCards(self):
         for card in self._cards:
-            self._layout.removeWidget(card)
+            self._grid.removeWidget(card)
             card.deleteLater()
         self._cards.clear()
 
@@ -227,10 +237,22 @@ class DramaPage(PackPage, PageScrollArea):
         for drama in dramas:
             card = DramaCard(drama, self._scrollWidget)
             card.downloadRequested.connect(self._onDownload)
-            self._layout.addWidget(card)
             self._cards.append(card)
             if drama.cover:
                 self._loadCover(card, drama.cover)
+        self._reflowCards()
+
+    def _reflowCards(self):
+        """按可用宽度把卡片重排进网格，窄窗口单列、宽窗口多列。"""
+        width = self.viewport().width() - GRID_MARGIN * 2 + GRID_SPACING
+        cols = max(1, width // (CARD_WIDTH + GRID_SPACING))
+        for i, card in enumerate(self._cards):
+            self._grid.addWidget(card, i // cols, i % cols)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "_grid"):
+            self._reflowCards()
 
     def _loadCover(self, card: DramaCard, url: str):
         def done(data: bytes):
@@ -261,7 +283,6 @@ class DramaPage(PackPage, PageScrollArea):
         self._page = page
         if not append:
             self._clearCards()
-            self._layout.removeWidget(self._moreButton)
             self._moreButton.hide()
             self._state.setLoading("正在加载分类…")
             self._state.show()
@@ -278,9 +299,7 @@ class DramaPage(PackPage, PageScrollArea):
                 self._state.hide()
             self._addCards(dramas)
             if page < totalPages and dramas:
-                self._layout.removeWidget(self._moreButton)
                 self._moreButton.show()
-                self._layout.addWidget(self._moreButton)
             if not append and not dramas:
                 self._showError("该分类暂时没有内容")
 
@@ -319,7 +338,6 @@ class DramaPage(PackPage, PageScrollArea):
         self._rankPage = page
         if not append:
             self._clearCards()
-            self._layout.removeWidget(self._moreButton)
             self._moreButton.hide()
             self._state.setLoading("正在加载榜单…")
             self._state.show()
@@ -336,9 +354,7 @@ class DramaPage(PackPage, PageScrollArea):
                 self._state.hide()
             self._addCards(dramas)
             if page < totalPages and dramas:
-                self._layout.removeWidget(self._moreButton)
                 self._moreButton.show()
-                self._layout.addWidget(self._moreButton)
             if not append and not dramas:
                 self._showError("该榜单暂时没有内容")
 
