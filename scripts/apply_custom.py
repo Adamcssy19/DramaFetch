@@ -71,6 +71,17 @@ def replace_text(relative, old, new, required=True, note='', marker=None, remove
             return
         message = f'{relative} 里找不到待替换内容（{note}）'
         (errors if required else warnings).append(message)
+        if required:
+            # 把文件里的实际内容打出来，方便对照是上游改了还是自己写错了
+            lines = [line for line in old.splitlines() if line.strip()]
+            probe = lines[0].strip() if lines else ''
+            index = text.find(probe) if probe else -1
+            if index >= 0:
+                errors.append(
+                    '    实际是：' + repr(text[index:index + len(old) + 30])
+                )
+            elif probe:
+                errors.append(f'    文件里找不到这一行：{probe!r}')
         return
     write(path, text.replace(old, new, 1))
     applied.append(f'{relative} — {note}')
@@ -673,7 +684,7 @@ def main():
         '                  DramaFetchNav(\n'
         '                    selectedIndex: _tab,\n'
         '                    onSelected: _onNavSelected,\n'
-        '                    expanded: constraints.maxWidth >= 1100,\n'
+        '                    expanded: constraints.maxWidth >= 880,\n'
         '                    destinations: const [\n'
         '                      DramaFetchNavItem(\n'
         '                        icon: Icons.search_outlined,\n'
@@ -701,6 +712,86 @@ def main():
         note='侧边栏换成 Windows 11 风格导航',
     )
 
+    # ---- 自动更新体验：测速选源、启动检查 ----
+    replace_text(
+        'lib/home_screen.dart',
+        "import 'dramafetch_nav.dart';\n",
+        "import 'dramafetch_nav.dart';\nimport 'dramafetch_update.dart';\n",
+        marker="import 'dramafetch_update.dart';",
+        note='引入更新组件',
+    )
+
+    # ---- 顶栏整理：标题不再重复，图标精简 ----
+    # 侧边栏顶部已经显示应用名，顶栏就不必再写一遍
+    replace_text(
+        'lib/home_screen.dart',
+        '            title: _selectionMode\n'
+        '                ? const Text(\n'
+        "                    '选择短剧',\n"
+        '                    maxLines: 1,\n'
+        '                    overflow: TextOverflow.ellipsis,\n'
+        '                  )\n'
+        '                : const Text(appName),\n',
+        '            title: _selectionMode\n'
+        '                ? const Text(\n'
+        "                    '选择短剧',\n"
+        '                    maxLines: 1,\n'
+        '                    overflow: TextOverflow.ellipsis,\n'
+        '                  )\n'
+        '                : const SizedBox.shrink(),\n',
+        remove=True,
+        note='顶栏不再重复显示应用名',
+    )
+
+    # 顶栏压矮一点，减少占位
+    replace_text(
+        'lib/home_screen.dart',
+        '            toolbarHeight: television ? 64 : null,\n',
+        '            toolbarHeight: television ? 64 : 46,\n',
+        remove=True,
+        note='顶栏高度收紧',
+    )
+
+    # 榜单已经在侧边栏里，顶栏不再重复放一个入口
+    replace_text(
+        'lib/home_screen.dart',
+        '                  IconButton(\n'
+        "                    key: const ValueKey('open-rankings'),\n"
+        "                    tooltip: '榜单',\n"
+        '                    onPressed: widget.store.sources.isEmpty\n'
+        '                        ? null\n'
+        '                        : _openRankings,\n'
+        '                    icon: const Icon(Icons.leaderboard_outlined),\n'
+        '                  ),\n',
+        '',
+        remove=True,
+        note='顶栏去掉重复的榜单入口',
+    )
+
+    # ---- 去掉用户管理（本项目不做多用户）----
+    replace_text(
+        'lib/home_screen.dart',
+        "                    const PopupMenuItem(value: 'users', child: Text('用户管理')),\n",
+        '',
+        remove=True,
+        note='去掉菜单里的用户管理',
+    )
+
+    replace_text(
+        'lib/home_screen.dart',
+        "                    } else if (value == 'users') {\n"
+        '                      Navigator.push(\n'
+        '                        context,\n'
+        '                        MaterialPageRoute<void>(\n'
+        '                          builder: (_) => ProfilesScreen(store: widget.store),\n'
+        '                        ),\n'
+        '                      );\n'
+        "                    } else if (value == 'display') {\n",
+        "                    } else if (value == 'display') {\n",
+        remove=True,
+        note='去掉用户管理的跳转分支',
+    )
+
     # ---- 自动更新：注册更新动作 ----
     replace_text(
         'native/core/app_runtime.go',
@@ -718,6 +809,8 @@ def main():
         'lib/core_bridge.dart',
         '  Future<ResourceSettings> resourceSettings() async => const ResourceSettings();\n',
         '  Future<ResourceSettings> resourceSettings() async => const ResourceSettings();\n'
+        '  Future<Map<String, dynamic>> probeUpdate() async =>\n'
+        "      throw AppFailure('当前环境不支持检查更新');\n"
         '  Future<Map<String, dynamic>> checkUpdate({String mirror = \'\'}) async =>\n'
         "      throw AppFailure('当前环境不支持检查更新');\n"
         '  Future<Map<String, dynamic>> downloadUpdate({String mirror = \'\'}) async =>\n'
@@ -743,6 +836,12 @@ def main():
         '    return ResourceSettings.fromJson(\n'
         "      await _call({'action': 'resourceSettings'}),\n"
         '    );\n'
+        '  }\n'
+        '\n'
+        '  @override\n'
+        '  Future<Map<String, dynamic>> probeUpdate() async {\n'
+        '    _adminPermission();\n'
+        "    return _call({'action': 'update', 'command': 'probe'});\n"
         '  }\n'
         '\n'
         '  @override\n'

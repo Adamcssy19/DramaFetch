@@ -1,7 +1,9 @@
+#include <dwmapi.h>
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -31,31 +33,64 @@ bool FocusRunningInstance() {
   return true;
 }
 
-// 窗口按屏幕可用区域的比例打开，适配不同分辨率与系统缩放比例，
-// 避免在小屏或高缩放的机器上开出一个超出屏幕的窗口。
+// 系统缩放比例（96 DPI 为 1.0）。
+double SystemScale() {
+  HDC screen = ::GetDC(nullptr);
+  if (screen == nullptr) {
+    return 1.0;
+  }
+  const int dpi = ::GetDeviceCaps(screen, LOGPIXELSX);
+  ::ReleaseDC(nullptr, screen);
+  if (dpi <= 0) {
+    return 1.0;
+  }
+  return static_cast<double>(dpi) / 96.0;
+}
+
+// 窗口大小按**逻辑像素**计算。
+//
+// 关键点：Flutter 的窗口创建会把我们给的尺寸再乘一次系统缩放，所以这里必须先
+// 把屏幕物理尺寸换算回逻辑尺寸，否则在高缩放屏上会得到一个超出屏幕的大窗口
+// （表现为看不到窗口最下方）。
 void ComputeWindowBounds(Win32Window::Point* origin, Win32Window::Size* size) {
+  const double scale = SystemScale();
+
   RECT work_area = {};
   if (!::SystemParametersInfo(SPI_GETWORKAREA, 0, &work_area, 0)) {
-    origin->x = 10;
-    origin->y = 10;
-    size->width = 1280;
-    size->height = 720;
+    origin->x = 40;
+    origin->y = 40;
+    size->width = 1180;
+    size->height = 760;
     return;
   }
-  const int screen_width = work_area.right - work_area.left;
-  const int screen_height = work_area.bottom - work_area.top;
-  int width = screen_width * 3 / 4;
-  int height = screen_height * 3 / 4;
-  const int min_width = screen_width < 1024 ? screen_width : 1024;
-  const int min_height = screen_height < 640 ? screen_height : 640;
-  if (width < min_width) width = min_width;
-  if (height < min_height) height = min_height;
-  if (width > screen_width) width = screen_width;
-  if (height > screen_height) height = screen_height;
-  origin->x = work_area.left + (screen_width - width) / 2;
-  origin->y = work_area.top + (screen_height - height) / 2;
+
+  const double logical_width =
+      (work_area.right - work_area.left) / scale;
+  const double logical_height =
+      (work_area.bottom - work_area.top) / scale;
+
+  // 以较小的窗口打开，够用即可；上限避免在超大屏上开出一个过宽的窗口
+  int width = static_cast<int>(logical_width * 0.78);
+  int height = static_cast<int>(logical_height * 0.80);
+  width = std::clamp(width, 1000, 1280);
+  height = std::clamp(height, 640, 860);
+  if (width > logical_width) width = static_cast<int>(logical_width);
+  if (height > logical_height) height = static_cast<int>(logical_height);
+
+  origin->x = static_cast<int>((logical_width - width) / 2);
+  origin->y = static_cast<int>((logical_height - height) / 2);
   size->width = width;
   size->height = height;
+}
+
+// Windows 11 的圆角窗口；系统不支持时静默跳过。
+void ApplyRoundedCorners(HWND window) {
+  if (window == nullptr) {
+    return;
+  }
+  // 33 = DWMWA_WINDOW_CORNER_PREFERENCE，2 = 圆角
+  const int preference = 2;
+  ::DwmSetWindowAttribute(window, 33, &preference, sizeof(preference));
 }
 
 }  // namespace
@@ -92,11 +127,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1280, 720);
+  Win32Window::Size size(1180, 760);
   ComputeWindowBounds(&origin, &size);
   if (!window.Create(APP_WINDOW_TITLE, origin, size)) {
     return EXIT_FAILURE;
   }
+  ApplyRoundedCorners(window.GetHandle());
   // 关闭窗口即退出程序，不驻留后台
   window.SetQuitOnClose(true);
 
