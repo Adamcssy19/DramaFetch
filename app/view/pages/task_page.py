@@ -445,7 +445,10 @@ class TaskPage(QWidget):
         text = f"{toReadableSize(speed)}/s"
         if cfg.isSpeedLimitEnabled.value:
             text += f" / {toReadableSize(cfg.speedLimitation.value)}/s"
-        self.speedBadge.setText(text)
+        try:
+            self.speedBadge.setText(text)
+        except RuntimeError:
+            pass  # 退出时页面控件可能已销毁，忽略迟到的速度信号
 
     def _onSpeedLimitChanged(self, _value=None) -> None:
         self.rateLimitButton.setChecked(cfg.isSpeedLimitEnabled.value)
