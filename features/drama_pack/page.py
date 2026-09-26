@@ -143,15 +143,10 @@ class DramaPage(PackPage, PageScrollArea):
         self._pack = pack
         self.setObjectName("DramaPage")
         self._cards: list[DramaCard] = []
-        self._mode = "category"
         self._route = api.CATEGORY_ROUTES[0][0]
         self._categoryName = api.CATEGORY_ROUTES[0][1]
         self._page = 1
         self._totalPages = 1
-        self._rankRoute = api.RANK_ROUTES[0][0]
-        self._rankName = api.RANK_ROUTES[0][1]
-        self._rankPage = 1
-        self._rankTotal = 1
         self._loading = False
 
         self._scrollWidget = QWidget()
@@ -163,6 +158,9 @@ class DramaPage(PackPage, PageScrollArea):
 
         self._initTopBar()
         self._initLayout()
+        self._startup()
+
+    def _startup(self):
         self._loadCategory(self._route, page=1)
 
     # ── 界面搭建 ──
@@ -182,16 +180,6 @@ class DramaPage(PackPage, PageScrollArea):
         self._categoryBox.setCurrentIndex(0)
         self._categoryBox.currentIndexChanged.connect(self._onCategoryChanged)
 
-        self._rankButton = PushButton("排行榜", self._scrollWidget)
-        self._rankButton.clicked.connect(self._onRankMode)
-
-        self._rankBox = ComboBox(self._scrollWidget)
-        for _, name in api.RANK_ROUTES:
-            self._rankBox.addItem(name)
-        self._rankBox.setCurrentIndex(0)
-        self._rankBox.currentIndexChanged.connect(self._onRankChanged)
-        self._rankBox.hide()
-
         self._backButton = TransparentToolButton(FluentIcon.RETURN, self._scrollWidget)
         self._backButton.setToolTip("返回分类浏览")
         self._backButton.installEventFilter(ToolTipFilter(self._backButton))
@@ -203,18 +191,9 @@ class DramaPage(PackPage, PageScrollArea):
         self._moreButton.clicked.connect(self._onMore)
 
     def _initLayout(self):
-        topBar = QHBoxLayout()
-        topBar.setSpacing(10)
-        topBar.addWidget(self._backButton)
-        topBar.addWidget(self._searchBox, 0, Qt.AlignmentFlag.AlignLeft)
-        topBar.addStretch(1)
-        topBar.addWidget(self._rankButton)
-        topBar.addWidget(self._categoryBox)
-        topBar.addWidget(self._rankBox)
-
         self._layout.setSpacing(10)
         self._layout.setContentsMargins(GRID_MARGIN, 16, GRID_MARGIN, 16)
-        self._layout.addLayout(topBar)
+        self._layout.addLayout(self._buildTopBar())
         self._layout.addWidget(self._state, 0, Qt.AlignmentFlag.AlignCenter)
         self._layout.addLayout(self._grid)
         self._layout.addWidget(self._moreButton, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -224,6 +203,15 @@ class DramaPage(PackPage, PageScrollArea):
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.enableTransparentBackground()
+
+    def _buildTopBar(self) -> QHBoxLayout:
+        topBar = QHBoxLayout()
+        topBar.setSpacing(10)
+        topBar.addWidget(self._backButton)
+        topBar.addWidget(self._searchBox, 0, Qt.AlignmentFlag.AlignLeft)
+        topBar.addStretch(1)
+        topBar.addWidget(self._categoryBox)
+        return topBar
 
     # ── 数据加载 ──
 
@@ -277,7 +265,6 @@ class DramaPage(PackPage, PageScrollArea):
         if self._loading:
             return
         self._loading = True
-        self._mode = "category"
         self._route = route
         self._categoryName = categoryName or self._categoryName
         self._page = page
@@ -288,8 +275,6 @@ class DramaPage(PackPage, PageScrollArea):
             self._state.show()
         self._backButton.hide()
         self._categoryBox.show()
-        self._rankBox.hide()
-        self._rankButton.show()
 
         def done(result):
             self._loading = False
@@ -313,59 +298,7 @@ class DramaPage(PackPage, PageScrollArea):
         )
 
     def _onMore(self):
-        if self._mode == "rank":
-            self._loadRank(self._rankRoute, self._rankPage + 1, append=True)
-        else:
-            self._loadCategory(self._route, self._page + 1, append=True)
-
-    def _onRankMode(self):
-        if self._loading:
-            return
-        self._searchBox.clear()
-        self._loadRank(self._rankRoute, page=1)
-
-    def _onRankChanged(self, index: int):
-        route, name = api.RANK_ROUTES[index]
-        self._loadRank(route, page=1, rankName=name)
-
-    def _loadRank(self, route: str, page: int, rankName: str = "", append: bool = False):
-        if self._loading:
-            return
-        self._loading = True
-        self._mode = "rank"
-        self._rankRoute = route
-        self._rankName = rankName or self._rankName
-        self._rankPage = page
-        if not append:
-            self._clearCards()
-            self._moreButton.hide()
-            self._state.setLoading("正在加载榜单…")
-            self._state.show()
-        self._backButton.show()
-        self._categoryBox.hide()
-        self._rankBox.show()
-        self._rankButton.hide()
-
-        def done(result):
-            self._loading = False
-            dramas, totalPages = result
-            self._rankTotal = totalPages
-            if not append:
-                self._state.hide()
-            self._addCards(dramas)
-            if page < totalPages and dramas:
-                self._moreButton.show()
-            if not append and not dramas:
-                self._showError("该榜单暂时没有内容")
-
-        def failed(error: str):
-            self._loading = False
-            self._showError("加载榜单失败：\n" + str(error))
-
-        self._pack.submit(
-            api.rank(route, page),
-            done=done, failed=failed, owner=self,
-        )
+        self._loadCategory(self._route, self._page + 1, append=True)
 
     def _onSearch(self, keyword: str):
         keyword = (keyword or "").strip()
@@ -378,12 +311,9 @@ class DramaPage(PackPage, PageScrollArea):
             self._openById(keyword)
             return
         self._loading = True
-        self._mode = "search"
         self._clearCards()
         self._moreButton.hide()
         self._categoryBox.hide()
-        self._rankBox.hide()
-        self._rankButton.hide()
         self._backButton.show()
         self._state.setLoading("正在搜索…")
         self._state.show()
@@ -472,3 +402,78 @@ class DramaPage(PackPage, PageScrollArea):
                           position=InfoBarPosition.BOTTOM_RIGHT, parent=self.window())
 
         self._pack.submit(api.detail(drama.seriesId), done=done, failed=failed, owner=self)
+
+
+class RankPage(DramaPage):
+    """独立排行榜页：左侧导航直达，榜单切换 + 网格卡片。"""
+
+    icon = FluentIcon.CALORIES
+    title = N("PackPage", "排行榜")
+
+    def __init__(self, pack, parent=None):
+        super().__init__(pack, parent)
+        self.setObjectName("RankPage")
+        # 短剧页特有的控件在榜单页一律隐藏
+        self._searchBox.hide()
+        self._categoryBox.hide()
+        self._backButton.hide()
+
+    def _initTopBar(self):
+        super()._initTopBar()
+        self._rankRoute = api.RANK_ROUTES[0][0]
+        self._rankName = api.RANK_ROUTES[0][1]
+        self._rankPage = 1
+        self._rankTotal = 1
+        self._rankBox = ComboBox(self._scrollWidget)
+        for _, name in api.RANK_ROUTES:
+            self._rankBox.addItem(name)
+        self._rankBox.setCurrentIndex(0)
+        self._rankBox.currentIndexChanged.connect(self._onRankChanged)
+
+    def _buildTopBar(self) -> QHBoxLayout:
+        topBar = QHBoxLayout()
+        topBar.setSpacing(10)
+        topBar.addWidget(self._rankBox, 0, Qt.AlignmentFlag.AlignLeft)
+        topBar.addStretch(1)
+        return topBar
+
+    def _startup(self):
+        self._loadRank(self._rankRoute, page=1)
+
+    def _onRankChanged(self, index: int):
+        route, name = api.RANK_ROUTES[index]
+        self._loadRank(route, page=1, rankName=name)
+
+    def _onMore(self):
+        self._loadRank(self._rankRoute, self._rankPage + 1, append=True)
+
+    def _loadRank(self, route: str, page: int, rankName: str = "", append: bool = False):
+        if self._loading:
+            return
+        self._loading = True
+        self._rankRoute = route
+        self._rankName = rankName or self._rankName
+        self._rankPage = page
+        if not append:
+            self._clearCards()
+            self._moreButton.hide()
+            self._state.setLoading("正在加载榜单…")
+            self._state.show()
+
+        def done(result):
+            self._loading = False
+            dramas, totalPages = result
+            self._rankTotal = totalPages
+            if not append:
+                self._state.hide()
+            self._addCards(dramas)
+            if page < totalPages and dramas:
+                self._moreButton.show()
+            if not append and not dramas:
+                self._showError("该榜单暂时没有内容")
+
+        def failed(error: str):
+            self._loading = False
+            self._showError("加载榜单失败：\n" + str(error))
+
+        self._pack.submit(api.rank(route, page), done=done, failed=failed, owner=self)

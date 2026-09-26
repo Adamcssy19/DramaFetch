@@ -87,9 +87,9 @@ class DramaPack(FeaturePack):
     parsers = [DramaParser]
 
     def pages(self):
-        from .page import DramaPage
+        from .page import DramaPage, RankPage
 
-        return [DramaPage]
+        return [DramaPage, RankPage]
 
     def optionCards(self, task: Task, parent=None) -> list:
         from app.view.components.option_cards import OutputFolderCard, SubworkerCountCard
