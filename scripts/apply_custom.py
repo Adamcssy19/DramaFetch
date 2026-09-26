@@ -468,6 +468,97 @@ def main():
         note='去掉本地媒体与合并入口',
     )
 
+    # 侧边栏固定四项：搜索 / 榜单 / 下载 / 设置
+    replace_text(
+        'lib/home_screen.dart',
+        '                    destinations: [\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.search_outlined),\n'
+        '                        selectedIcon: Icon(Icons.search),\n'
+        "                        label: Text('搜索'),\n"
+        '                      ),\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.history_rounded),\n'
+        "                        label: Text('最近观看'),\n"
+        '                      ),\n'
+        '                      if (widget.store.canDownload)\n'
+        '                        NavigationRailDestination(\n'
+        '                          icon: Icon(Icons.download_outlined),\n'
+        '                          selectedIcon: Icon(Icons.download_rounded),\n'
+        "                          label: Text('下载'),\n"
+        '                        ),\n'
+        '                    ],\n',
+        '                    destinations: [\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.search_outlined),\n'
+        '                        selectedIcon: Icon(Icons.search),\n'
+        "                        label: Text('搜索'),\n"
+        '                      ),\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.leaderboard_outlined),\n'
+        '                        selectedIcon: Icon(Icons.leaderboard_rounded),\n'
+        "                        label: Text('榜单'),\n"
+        '                      ),\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.download_outlined),\n'
+        '                        selectedIcon: Icon(Icons.download_rounded),\n'
+        "                        label: Text('下载'),\n"
+        '                      ),\n'
+        '                      NavigationRailDestination(\n'
+        '                        icon: Icon(Icons.settings_outlined),\n'
+        '                        selectedIcon: Icon(Icons.settings_rounded),\n'
+        "                        label: Text('设置'),\n"
+        '                      ),\n'
+        '                    ],\n',
+        marker="label: Text('榜单'),",
+        note='侧边栏四项',
+    )
+
+    # 页面内容按新的四项索引切换
+    replace_text(
+        'lib/home_screen.dart',
+        '                      : _tab == 2\n'
+        '                      ? DownloadsScreen(\n'
+        '                          repository: widget.repository,\n'
+        '                          store: widget.store,\n'
+        '                          embedded: true,\n'
+        '                        )\n'
+        '                      : SavedLibrary(\n'
+        "                          key: ValueKey('saved-tab-$_tab'),\n"
+        '                          repository: widget.repository,\n'
+        '                          store: widget.store,\n'
+        '                          history: true,\n'
+        '                          onOpen: _openDrama,\n'
+        '                          onContinue: (drama) =>\n'
+        '                              _openDrama(drama, resume: true),\n'
+        '                          onDownload:\n'
+        '                              widget.repository.supportsDownloads &&\n'
+        '                                  widget.store.canDownload\n'
+        '                              ? (drama) => _openDrama(drama, download: true)\n'
+        '                              : null,\n'
+        '                        ),\n',
+        '                      : _tab == 1\n'
+        '                      ? RankingsScreen(\n'
+        '                          repository: widget.repository,\n'
+        '                          store: widget.store,\n'
+        '                          initialGroup: widget.store.sources.isEmpty\n'
+        "                              ? ''\n"
+        '                              : widget.store.sources.first.id,\n'
+        '                        )\n'
+        '                      : _tab == 2\n'
+        '                      ? DownloadsScreen(\n'
+        '                          repository: widget.repository,\n'
+        '                          store: widget.store,\n'
+        '                          embedded: true,\n'
+        '                        )\n'
+        '                      : SettingsScreen(\n'
+        '                          repository: widget.repository,\n'
+        '                          store: widget.store,\n'
+        '                        ),\n',
+        marker='initialGroup: widget.store.sources.isEmpty',
+        note='页面切换四项',
+    )
+
     # ---- 自动更新：注册更新动作 ----
     replace_text(
         'native/core/app_runtime.go',
