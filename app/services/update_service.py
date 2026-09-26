@@ -149,9 +149,16 @@ class UpdateService:
         appData = data.get("app", {})
         latestVersion = appData.get("version", "")
         if latestVersion and isNewer(VERSION, latestVersion):
-            self._emit("app", UpdateState.AVAILABLE,
-                        label=f"DramaFetch {latestVersion}",
-                        latestVersion=latestVersion)
+            if await self._appAssetReady(latestVersion):
+                self._emit("app", UpdateState.AVAILABLE,
+                            label=f"DramaFetch {latestVersion}",
+                            latestVersion=latestVersion)
+            else:
+                # Release 刚创建、安装包还在上传时不要提示，避免用户点了却下载失败；
+                # 安排延迟复查，资产就绪后自动重新提示
+                logger.debug("新版本 {} 的安装包尚未上传完成，稍后复查", latestVersion)
+                self._emit("app", UpdateState.IDLE)
+                self._coroutineRunner.submit(self._delayedRecheck())
         else:
             self._emit("app", UpdateState.IDLE)
 
@@ -185,6 +192,33 @@ class UpdateService:
             return data
         except RuntimeError:
             return None
+
+    async def _delayedRecheck(self, delay: float = 600) -> None:
+        """Release 刚创建、安装包未上传完时，延迟后自动复查。"""
+        await asyncio.sleep(delay)
+        await self._check()
+
+    async def _appAssetReady(self, latestVersion: str) -> bool:
+        """探测新版本的安装包资产是否已上传完成（防止检测到更新却下载失败）。"""
+        from app.sources import probeDownloadUrl
+
+        appData = self._versionsData.get("app", {})
+        platformKey = buildPlatformKey()
+        files: list[str] = []
+        patch = appData.get("patches", {}).get(platformKey)
+        if patch and patch.get("from") == VERSION:
+            files.append(patch["file"])
+        full = appData.get("full", {}).get(platformKey)
+        if full:
+            files.append(full["file"])
+        if not files:
+            return False
+        for name in files:
+            try:
+                await probeDownloadUrl(APP_REPO, f"v{latestVersion}", name)
+            except Exception:
+                return False
+        return True
 
     async def _download(self, targetId: str) -> None:
         info = self._infos.get(targetId)

@@ -33,32 +33,19 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "VERSION=$VERSION"
 
-      - name: Create tag and release
+      - name: Create tag
         if: ${{ github.event.inputs.create_release == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          TAG="v$VERSION"
+          TAG="v${{ steps.version.outputs.version }}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+          # 只打 tag，不建 Release：等安装包上传完成时再创建，
+          # 避免出现“有 Release 无资产”的空窗期（客户端会检测到更新但下载失败）
+          if ! git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
             git tag "$TAG"
             git push origin "$TAG"
-          fi
-
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            NOTES=$(awk -v ver="$VERSION" '
-              $0 ~ "^#+ +"ver"($| )" {flag=1; next}
-              /^#+ / && flag {exit}
-              flag {print}
-            ' CHANGELOG.md)
-            if [ -z "$NOTES" ]; then
-              NOTES="DramaFetch v$VERSION"
-            fi
-            gh release create "$TAG" --title "DramaFetch $VERSION" --notes "$NOTES" --latest
           fi
 
   build-windows:
@@ -121,7 +108,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release upload "v${{ env.VERSION }}" "dist/DramaFetch-v${{ env.VERSION }}-x64-Setup.exe" "DramaFetch-v${{ env.VERSION }}-Windows-x64.zip" --clobber
+          # 资产就绪后才创建 Release（含 --latest）：此时客户端检测到更新即可下载
+          $tag = "v${{ env.VERSION }}"
+          $files = @("dist/DramaFetch-v${{ env.VERSION }}-x64-Setup.exe", "DramaFetch-v${{ env.VERSION }}-Windows-x64.zip")
+          $notes = (Select-String -Path CHANGELOG.md -Pattern "^## $($env:VERSION)\b" -Context 0,20 | Out-String).Trim()
+          if (gh release view $tag) {
+            gh release upload $tag $files --clobber
+          } else {
+            if (-not $notes) { $notes = "DramaFetch v${{ env.VERSION }}" }
+            gh release create $tag $files --title "DramaFetch ${{ env.VERSION }}" --notes "$notes" --latest
+          }
 
       - name: Upload artifact (no release)
         if: ${{ github.event.inputs.create_release == 'false' }}
