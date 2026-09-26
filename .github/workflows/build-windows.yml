@@ -49,15 +49,14 @@ jobs:
           channel: stable
           cache: true
 
-      # 编译与打包工具安装一次要一两分钟，缓存下来，命中就直接跳过安装
+      # 编译工具安装一次要一两分钟，缓存下来；命中就直接跳过安装
+      # 只缓存 MinGW（在 ProgramData 下，写入不受限）；Inno Setup 装在 Program Files，恢复缓存容易出问题，每次现装
       - name: 还原编译工具缓存
         id: toolcache
         uses: actions/cache@v4
         with:
-          path: |
-            C:\ProgramData\mingw64
-            C:\Program Files (x86)\Inno Setup 6
-          key: windows-tools-mingw-innosetup-v1
+          path: C:\ProgramData\mingw64
+          key: windows-tools-mingw-v2
 
       - name: 安装编译与打包工具
         shell: pwsh
@@ -76,8 +75,6 @@ jobs:
           }
           if (-not (Test-Path $iscc)) {
             choco install innosetup --no-progress -y
-          } else {
-            Write-Host '打包工具已从缓存恢复'
           }
           if (-not $exe) { $exe = (Get-Command x86_64-w64-mingw32-gcc -ErrorAction SilentlyContinue).Source }
           if (-not $exe) { throw '编译工具链安装失败，找不到 gcc' }
