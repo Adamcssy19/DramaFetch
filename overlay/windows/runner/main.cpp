@@ -47,49 +47,81 @@ double SystemScale() {
   return static_cast<double>(dpi) / 96.0;
 }
 
-// 窗口大小按**逻辑像素**计算。
+// 初始窗口尺寸，单位是**逻辑像素**。
 //
-// 关键点：Flutter 的窗口创建会把我们给的尺寸再乘一次系统缩放，所以这里必须先
-// 把屏幕物理尺寸换算回逻辑尺寸，否则在高缩放屏上会得到一个超出屏幕的大窗口
-// （表现为看不到窗口最下方）。
+// 关键点：Flutter 的窗口创建会把我们给的尺寸再乘一次系统缩放，所以这里必须先把
+// 屏幕物理尺寸换算回逻辑尺寸，否则在高缩放屏上会得到一个超出屏幕的大窗口。
+// 真正的最终位置与大小稍后由 FitToWorkArea 用物理坐标定死，这里只是给个合理初值。
 void ComputeWindowBounds(Win32Window::Point* origin, Win32Window::Size* size) {
   const double scale = SystemScale();
 
   RECT work_area = {};
   if (!::SystemParametersInfo(SPI_GETWORKAREA, 0, &work_area, 0)) {
-    origin->x = 40;
-    origin->y = 40;
-    size->width = 1180;
-    size->height = 760;
+    origin->x = 0;
+    origin->y = 0;
+    size->width = 1280;
+    size->height = 800;
     return;
   }
 
-  const double logical_width =
-      (work_area.right - work_area.left) / scale;
-  const double logical_height =
-      (work_area.bottom - work_area.top) / scale;
+  const double logical_width = (work_area.right - work_area.left) / scale;
+  const double logical_height = (work_area.bottom - work_area.top) / scale;
 
-  // 以较小的窗口打开，够用即可；上限避免在超大屏上开出一个过宽的窗口
-  int width = static_cast<int>(logical_width * 0.68);
-  int height = static_cast<int>(logical_height * 0.72);
-  width = std::clamp(width, 940, 1120);
-  height = std::clamp(height, 600, 740);
-  if (width > logical_width) width = static_cast<int>(logical_width);
-  if (height > logical_height) height = static_cast<int>(logical_height);
-
-  origin->x = static_cast<int>((logical_width - width) / 2);
-  origin->y = static_cast<int>((logical_height - height) / 2);
-  size->width = width;
-  size->height = height;
+  origin->x = 0;
+  origin->y = 0;
+  size->width = static_cast<int>(logical_width);
+  size->height = static_cast<int>(logical_height);
 }
 
-// Windows 11 的圆角窗口；系统不支持时静默跳过。
-void ApplyRoundedCorners(HWND window) {
+// 去掉系统标题栏。
+//
+// 最小化与关闭改在应用界面里自己画（见 overlay/lib/design/df_window_bar.dart），
+// 所以这里把边框、标题栏、系统菜单与系统按钮的样式位全部摘掉，只留一个可激活的弹出窗口。
+// 尺寸与位置随后由 FitToWorkArea 定死，窗口不需要拖拽与缩放。
+void MakeFrameless(HWND window) {
   if (window == nullptr) {
     return;
   }
-  // 33 = DWMWA_WINDOW_CORNER_PREFERENCE，2 = 圆角
-  const int preference = 2;
+  LONG_PTR style = ::GetWindowLongPtr(window, GWL_STYLE);
+  style &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX |
+             WS_SYSMENU | WS_BORDER | WS_DLGFRAME);
+  style |= WS_POPUP;
+  ::SetWindowLongPtr(window, GWL_STYLE, style);
+
+  LONG_PTR ex_style = ::GetWindowLongPtr(window, GWL_EXSTYLE);
+  ex_style &= ~(WS_EX_CLIENTEDGE | WS_EX_WINDOWEDGE | WS_EX_DLGMODALFRAME);
+  ex_style |= WS_EX_APPWINDOW;  // 无边框窗口默认不出现在任务栏，这行把它加回去
+  ::SetWindowLongPtr(window, GWL_EXSTYLE, ex_style);
+
+  ::SetWindowPos(window, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                     SWP_FRAMECHANGED);
+}
+
+// 用**物理像素**把窗口铺满屏幕工作区（任务栏仍然可见）。
+// 这里不走逻辑坐标，省掉一次缩放换算，位置不会因为 DPI 而偏。
+void FitToWorkArea(HWND window) {
+  if (window == nullptr) {
+    return;
+  }
+  RECT work_area = {};
+  if (!::SystemParametersInfo(SPI_GETWORKAREA, 0, &work_area, 0)) {
+    return;
+  }
+  ::SetWindowPos(window, HWND_TOP, work_area.left, work_area.top,
+                 work_area.right - work_area.left,
+                 work_area.bottom - work_area.top,
+                 SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
+// 窗口圆角偏好：1 = 直角。
+// 铺满整个工作区后圆角只会在四角露出桌面，所以明确关掉。
+void ApplyCorners(HWND window) {
+  if (window == nullptr) {
+    return;
+  }
+  // 33 = DWMWA_WINDOW_CORNER_PREFERENCE，1 = DWMWCP_DONOTROUND
+  const int preference = 1;
   ::DwmSetWindowAttribute(window, 33, &preference, sizeof(preference));
 }
 
@@ -126,13 +158,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
-  Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1180, 760);
+  Win32Window::Point origin(0, 0);
+  Win32Window::Size size(1280, 800);
   ComputeWindowBounds(&origin, &size);
   if (!window.Create(APP_WINDOW_TITLE, origin, size)) {
     return EXIT_FAILURE;
   }
-  ApplyRoundedCorners(window.GetHandle());
+  HWND handle = window.GetHandle();
+  MakeFrameless(handle);
+  FitToWorkArea(handle);
+  ApplyCorners(handle);
   // 关闭窗口即退出程序，不驻留后台
   window.SetQuitOnClose(true);
 

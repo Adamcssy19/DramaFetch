@@ -90,7 +90,7 @@ jobs:
         working-directory: upstream/guoapp
         run: |
           flutter pub get --enforce-lockfile
-          flutter analyze --no-fatal-infos --no-fatal-warnings lib/app_build.dart lib/app_theme.dart lib/download_methods.dart lib/resource_settings.dart lib/update_screen.dart lib/dramafetch_home.dart lib/dramafetch_nav.dart lib/dramafetch_update.dart lib/dramafetch_settings.dart lib/dramafetch_topbar.dart lib/design/df_tokens.dart lib/design/df_surface.dart lib/design/df_controls.dart lib/design/df_poster.dart lib/design/df_design.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/app_build.dart lib/app_theme.dart lib/download_methods.dart lib/resource_settings.dart lib/update_screen.dart lib/dramafetch_home.dart lib/dramafetch_nav.dart lib/dramafetch_update.dart lib/dramafetch_settings.dart lib/dramafetch_topbar.dart lib/design/df_tokens.dart lib/design/df_surface.dart lib/design/df_controls.dart lib/design/df_poster.dart lib/design/df_design.dart lib/design/df_window_bar.dart
 
       - name: 构建应用
         run: python scripts/build_app.py

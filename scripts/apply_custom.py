@@ -1300,49 +1300,14 @@ def main():
         note='全局渐变背景与光斑',
     )
 
-    # 顶栏换成一块悬浮玻璃条，标题显示当前页名
+    # 顶栏平时完全收起：应用名已经在侧边栏顶部，页面标题在内容区，
+    # 顶栏再占一条只会多出一块玻璃与重复的标题。只在多选或电视端才撑开。
     replace_text(
         'lib/home_screen.dart',
-        "import 'dramafetch_nav.dart';\n",
-        "import 'dramafetch_nav.dart';\n"
-        "import 'dramafetch_topbar.dart';\n"
-        "import 'design/df_design.dart';\n",
-        required=False,
-        marker="import 'dramafetch_topbar.dart';",
-        note='引入顶栏玻璃条',
-    )
-    replace_text(
-        'lib/home_screen.dart',
-        '            toolbarHeight: television ? 64 : 46,\n'
-        '            titleSpacing: 12,\n',
-        '            toolbarHeight: television ? 64 : 56,\n'
-        '            titleSpacing: 20,\n'
-        '            flexibleSpace: const DramaFetchTopBar(),\n',
-        marker='flexibleSpace: const DramaFetchTopBar()',
-        note='顶栏加玻璃条',
-    )
-    replace_text(
-        'lib/home_screen.dart',
-        '            title: _selectionMode\n'
-        '                ? const Text(\n'
-        "                    '选择短剧',\n"
-        '                    maxLines: 1,\n'
-        '                    overflow: TextOverflow.ellipsis,\n'
-        '                  )\n'
-        '                : const SizedBox.shrink(),\n',
-        '            title: _selectionMode\n'
-        '                ? const Text(\n'
-        "                    '选择短剧',\n"
-        '                    maxLines: 1,\n'
-        '                    overflow: TextOverflow.ellipsis,\n'
-        '                  )\n'
-        '                : Text(\n'
-        "                    const ['搜索', '榜单', '下载', '设置'][_tab.clamp(0, 3)],\n"
-        '                    maxLines: 1,\n'
-        '                    overflow: TextOverflow.ellipsis,\n'
-        '                  ),\n',
-        marker="const ['搜索', '榜单', '下载', '设置'][_tab.clamp(0, 3)]",
-        note='顶栏显示当前页名',
+        '            toolbarHeight: television ? 64 : 46,\n',
+        '            toolbarHeight: _selectionMode || television ? 56 : 0,\n',
+        marker='toolbarHeight: _selectionMode || television ? 56 : 0,',
+        note='顶栏平时收起',
     )
 
     # 侧边栏自带圆角、间距与玻璃底，上游的分隔竖线就多余了

@@ -10,3 +10,4 @@ export 'df_controls.dart';
 export 'df_poster.dart';
 export 'df_surface.dart';
 export 'df_tokens.dart';
+export 'df_window_bar.dart';

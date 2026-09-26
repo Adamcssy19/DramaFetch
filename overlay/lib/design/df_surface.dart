@@ -3,11 +3,15 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import 'df_tokens.dart';
+import 'df_window_bar.dart';
 
 /// 应用背景：渐变打底 + 三团静态光斑。
 ///
 /// 光斑是玻璃质感的必要前提 —— 纯色背景上的半透明面板看起来只是灰方块。
 /// 用 [CustomPaint] 一次画完，尺寸不变就不再重绘，比叠三层大模糊图省得多。
+///
+/// 另外负责挂载窗口按钮：系统标题栏已经在 windows/runner/main.cpp 里摘掉，
+/// 最小化与关闭必须由应用自己提供，挂在这一层才能保证每个页面都看得到。
 class DfBackdrop extends StatelessWidget {
   const DfBackdrop({super.key, required this.child});
 
@@ -31,6 +35,7 @@ class DfBackdrop extends StatelessWidget {
             child: CustomPaint(painter: _GlowPainter(palette)),
           ),
           child,
+          const Positioned(top: 10, right: 14, child: DfWindowButtons()),
         ],
       ),
     );

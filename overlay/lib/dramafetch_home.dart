@@ -154,7 +154,7 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
       animation: widget.store,
       builder: (context, _) => LayoutBuilder(
         builder: (context, constraints) => ListView(
-          padding: const EdgeInsets.fromLTRB(28, 22, 28, 34),
+          padding: const EdgeInsets.fromLTRB(28, 26, 28, 34),
           children: [
             if (updates != null)
               Padding(
