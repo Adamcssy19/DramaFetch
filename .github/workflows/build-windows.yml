@@ -65,27 +65,6 @@ jobs:
           Split-Path $exe | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & $exe --version | Select-Object -First 1
 
-      - name: 准备安装器中文界面
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          $dir = 'C:\Program Files (x86)\Inno Setup 6\Languages'
-          if (-not (Test-Path $dir)) { exit 0 }
-          $urls = @(
-            'https://cdn.jsdelivr.net/gh/jrsoftware/issrc@main/Files/Languages/Unofficial/ChineseSimplified.isl',
-            'https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl'
-          )
-          foreach ($url in $urls) {
-            try {
-              Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile (Join-Path $dir 'ChineseSimplified.isl')
-              Write-Host "中文语言文件已就位：$url"
-              exit 0
-            } catch {
-              Write-Warning "下载失败，换下一个源：$url"
-            }
-          }
-          Write-Warning '中文语言文件全部下载失败，安装器改用英文界面'
-
       - name: 应用定制
         run: python scripts/apply_custom.py
 

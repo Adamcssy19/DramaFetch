@@ -57,6 +57,11 @@ iscc = locate_iscc()
 print('使用编译器：', iscc)
 print('应用版本号：', version)
 
+# 中文语言文件随仓库提供，缺失时直接报错，避免又打出一个英文界面的安装包
+language_file = root / 'installer' / 'ChineseSimplified.isl'
+if not language_file.is_file():
+    raise SystemExit('缺少安装器中文语言文件：' + str(language_file))
+
 subprocess.run(
     [
         str(iscc),
