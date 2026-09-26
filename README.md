@@ -43,13 +43,13 @@ DramaFetch 是一个面向 Windows 的短剧下载工具：浏览或粘贴链接
 
 ## 下载方式
 
-红果站源支持四种取流方式，在 **设置 → 网络与资源 → 红果下载方式** 中切换：
+果子站源支持四种取流方式，在 **设置 → 网络与资源 → 果子下载方式** 中切换：
 
 | 方式 | 说明 |
 | --- | --- |
 | 自动择优（默认） | 依次尝试下面三种，先成功就先使用 |
-| App 直连 | 走红果 App 接口取原画直链，画质最好；接口调整时可能失效 |
-| 网页解析 | 解析红果播放页取流，部分剧集可能只允许试看 |
+| App 直连 | 走果子 App 接口取原画直链，画质最好；接口调整时可能失效 |
+| 网页解析 | 解析果子播放页取流，部分剧集可能只允许试看 |
 | 备用接口 | App 与网页都不可用时的兜底通道 |
 
 ## 自动更新
@@ -134,7 +134,7 @@ python scripts/build_installer.py
 | 项目 | 说明 |
 | --- | --- |
 | [x315600/guoapp](https://github.com/x315600/guoapp) | 主上游，多端短剧应用的站源核心与下载实现 |
-| [327044572/hongguo-downloader](https://github.com/327044572/hongguo-downloader) | 红果直连接口与 CENC-AES-CTR 解密实现（GPL-3.0） |
+| [327044572/hongguo-downloader](https://github.com/327044572/hongguo-downloader) | 果子直连接口与 CENC-AES-CTR 解密实现（GPL-3.0） |
 | [zhenyong97/hongguo-downloader](https://github.com/zhenyong97/hongguo-downloader) | 下载管理、并发、合并与清理等交互设计（GPL-3.0） |
 
 ## 免责声明

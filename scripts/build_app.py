@@ -45,14 +45,15 @@ def main():
 
     steps = [
         (
+            # 只保留果子站源，不加 --all-sources
             [sys.executable, str(upstream / 'scripts' / 'build_native.py'),
-             '--platform', 'windows', '--all-sources'],
+             '--platform', 'windows'],
             '编译站源核心',
         ),
         ([flutter, 'pub', 'get', '--enforce-lockfile'], '拉取依赖'),
         (
             [flutter, 'build', 'windows', '--release', '--no-pub',
-             '--dart-define=ALL_SOURCES=true'],
+             '--dart-define=ALL_SOURCES=false'],
             '打包应用',
         ),
     ]
