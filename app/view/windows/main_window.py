@@ -280,10 +280,20 @@ class MainWindow(MSFluentWindow):
             self._progressToast.deleteLater()
             self._progressToast = None
 
+        content = self.tr("最新版本: {0}").format(info.latestVersion)
+        if info.changelog:
+            lines = [line.strip().lstrip("-*• ").strip()
+                     for line in info.changelog.splitlines() if line.strip()]
+            preview = "；".join(line for line in lines[:3] if line)
+            if len(preview) > 100:
+                preview = preview[:100] + "…"
+            if preview:
+                content += "\n" + preview
+
         infoBar = InfoBar(
             icon=FluentIcon.CLOUD,
             title=self.tr("检测到新版本"),
-            content=self.tr("最新版本: {0}").format(info.latestVersion),
+            content=content,
             orient=Qt.Orientation.Horizontal,
             isClosable=True,
             duration=-1,
@@ -347,8 +357,11 @@ class MainWindow(MSFluentWindow):
         from app.update import fetchAssetUrl, fetchRelease
         from app.view.dialogs.release_info import ReleaseInfoDialog
 
+        info = self._updateService.info("app")
+        changelog = info.changelog if info is not None else ""
+
         def onFetched(release):
-            dialog = ReleaseInfoDialog(release, self)
+            dialog = ReleaseInfoDialog(release, self, changelog=changelog)
 
             def onAccepted():
                 asset = dialog.selectedAsset()

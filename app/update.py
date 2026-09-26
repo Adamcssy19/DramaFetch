@@ -1,11 +1,31 @@
 from __future__ import annotations
 
 import platform
+import re
 import sys
 
 from app.sources import Release, ReleaseAsset, Repo, fetchLatestRelease, probeDownloadUrl
 
 APP_REPO = Repo("Adamcssy19/DramaFetch")
+
+
+def extractChangelog(text: str, version: str) -> str:
+    """从 CHANGELOG 内容提取指定版本的段落（到下一个标题为止）。"""
+    lines = text.splitlines()
+    start = None
+    pattern = re.compile(rf"^#+\s+.*?{re.escape(version)}(\s|$)")
+    for i, line in enumerate(lines):
+        if pattern.match(line.strip()):
+            start = i + 1
+            break
+    if start is None:
+        return ""
+    out: list[str] = []
+    for line in lines[start:]:
+        if re.match(r"^#+\s", line):
+            break
+        out.append(line)
+    return "\n".join(out).strip()
 
 
 def parseVersion(s: str) -> tuple[int, ...]:

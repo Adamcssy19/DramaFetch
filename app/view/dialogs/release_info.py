@@ -19,11 +19,12 @@ if TYPE_CHECKING:
 
 
 class ReleaseInfoDialog(MessageBoxBase):
-    def __init__(self, release: Release, parent=None):
+    def __init__(self, release: Release, parent=None, changelog: str = ""):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self._release = release
+        self._changelog = changelog
 
         self.versionLabel = SubtitleLabel(release.version, self)
         self.dateLabel = CaptionLabel(release.publishedAt[:10] if release.publishedAt else "", self)
@@ -46,7 +47,7 @@ class ReleaseInfoDialog(MessageBoxBase):
         self.detailButton.setToolTip(self.tr("打开发布页"))
         self.detailButton.installEventFilter(ToolTipFilter(self.detailButton))
 
-        self.descriptionEdit.setMarkdown(self._release.body or self.tr("暂无更新说明"))
+        self.descriptionEdit.setMarkdown(self._changelog or self._release.body or self.tr("暂无更新说明"))
         self.descriptionEdit.moveCursor(QTextCursor.MoveOperation.Start)
 
         self.assetView.setRootIsDecorated(False)

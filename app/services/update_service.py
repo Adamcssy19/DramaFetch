@@ -110,6 +110,7 @@ class UpdateInfo:
     state: UpdateState = UpdateState.IDLE
     progress: float = 0
     error: TaskError | None = None
+    changelog: str = ""
 
 
 class UpdateService:
@@ -119,6 +120,9 @@ class UpdateService:
         self._coroutineRunner = coroutineRunner
         self._infos: dict[str, UpdateInfo] = {}
         self._versionsData: dict = {}
+
+    def info(self, targetId: str) -> UpdateInfo | None:
+        return self._infos.get(targetId)
 
     def check(self) -> None:
         self._coroutineRunner.submit(self._check())
@@ -150,9 +154,11 @@ class UpdateService:
         latestVersion = appData.get("version", "")
         if latestVersion and isNewer(VERSION, latestVersion):
             if await self._appAssetReady(latestVersion):
+                changelog = await self._fetchChangelog(latestVersion)
                 self._emit("app", UpdateState.AVAILABLE,
                             label=f"DramaFetch {latestVersion}",
-                            latestVersion=latestVersion)
+                            latestVersion=latestVersion,
+                            changelog=changelog)
             else:
                 # Release 刚创建、安装包还在上传时不要提示，避免用户点了却下载失败；
                 # 安排延迟复查，资产就绪后自动重新提示
@@ -197,6 +203,21 @@ class UpdateService:
         """Release 刚创建、安装包未上传完时，延迟后自动复查。"""
         await asyncio.sleep(delay)
         await self._check()
+
+    async def _fetchChangelog(self, latestVersion: str) -> str:
+        """拉取仓库 CHANGELOG，提取新版本相对上一版的更新日志。"""
+        try:
+            from app.update import extractChangelog
+
+            path = STAGING_DIR / "CHANGELOG.md"
+            STAGING_DIR.mkdir(parents=True, exist_ok=True)
+            await fetchRawFile(APP_REPO, "main", "CHANGELOG.md", path)
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            path.unlink(missing_ok=True)
+            return extractChangelog(text, latestVersion)
+        except Exception as e:
+            logger.debug("获取更新日志失败: {}", repr(e))
+            return ""
 
     async def _appAssetReady(self, latestVersion: str) -> bool:
         """探测新版本的安装包资产是否已上传完成（防止检测到更新却下载失败）。"""
@@ -359,11 +380,12 @@ class UpdateService:
                 state=state,
                 progress=kwargs.get("progress", 0),
                 error=kwargs.get("error"),
+                changelog=kwargs.get("changelog", ""),
             )
         else:
             info = replace(current, state=state, **{
                 k: v for k, v in kwargs.items()
-                if k in ("label", "currentVersion", "latestVersion", "progress", "error")
+                if k in ("label", "currentVersion", "latestVersion", "progress", "error", "changelog")
             })
         self._infos[targetId] = info
         self._coroutineRunner.post(self.changed.emit, info)
