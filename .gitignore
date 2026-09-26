@@ -1,0 +1,14 @@
+# 构建产物
+build/
+dist/
+
+# 图标处理脚本的中间输出
+tools/out/
+
+# Flutter / Dart 临时文件
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# 上游源码不入库，构建前用 scripts/fetch_upstream.py 现拉
+upstream/
