@@ -143,7 +143,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="v${version//+/-}"
+          # 标签只带版本号，不带构建号，例如 v0.0.1
+          tag="v${version%%+*}"
           {
             printf 'DramaFetch %s（Windows 64 位安装版）\n\n' "$version"
             printf '下载下面的安装程序，双击安装即可，安装过程会自动创建开始菜单与桌面快捷方式。\n'
