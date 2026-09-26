@@ -262,6 +262,51 @@ def main():
         note='红果取流接入多方式',
     )
 
+    # ---- 下载目录与文件命名 ----
+
+    # 默认下载目录放到系统下载文件夹下的 DramaFetch 目录，方便直接找到
+    replace_text(
+        'native/core/app_storage.go',
+        '\tif json.Unmarshal(body, &value) == nil && filepath.IsAbs(value.Directory) {\n'
+        '\t\treturn filepath.Clean(value.Directory)\n'
+        '\t}\n'
+        '\treturn filepath.Join(directory, "downloads")\n',
+        '\tif json.Unmarshal(body, &value) == nil && filepath.IsAbs(value.Directory) {\n'
+        '\t\treturn filepath.Clean(value.Directory)\n'
+        '\t}\n'
+        '\t// 默认放在系统下载文件夹下的 DramaFetch 目录，方便直接找到\n'
+        '\tif home, err := os.UserHomeDir(); err == nil && home != "" {\n'
+        '\t\treturn filepath.Join(home, "Downloads", "DramaFetch")\n'
+        '\t}\n'
+        '\treturn filepath.Join(directory, "downloads")\n',
+        marker='"Downloads", "DramaFetch"',
+        note='默认下载目录',
+    )
+
+    # 按剧名归档
+    replace_text(
+        'native/core/app_download_collections.go',
+        'func (manager *nativeDownloads) jobDirectory(job nativeDownloadJob) string {\n'
+        '\tif job.Folder != "" {\n',
+        'func (manager *nativeDownloads) jobDirectory(job nativeDownloadJob) string {\n'
+        '\t// 本项目改造：按剧名归档，下载目录里直接可读\n'
+        '\tif name := nativeDownloadFolderName(job); name != "" {\n'
+        '\t\treturn filepath.Join(manager.root, name)\n'
+        '\t}\n'
+        '\tif job.Folder != "" {\n',
+        marker='nativeDownloadFolderName(job)',
+        note='按剧名归档',
+    )
+
+    # 视频文件名用「剧名 集号」
+    replace_text(
+        'native/core/app_download_transfer.go',
+        '\tentry := "media.mp4"\n',
+        '\tentry := nativeDownloadFileName(job)\n',
+        marker='entry := nativeDownloadFileName(job)',
+        note='视频文件命名',
+    )
+
     # ---- 自动更新：注册更新动作 ----
     replace_text(
         'native/core/app_runtime.go',
