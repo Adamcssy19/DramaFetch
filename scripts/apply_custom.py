@@ -87,6 +87,50 @@ def replace_text(relative, old, new, required=True, note='', marker=None, remove
     applied.append(f'{relative} — {note}')
 
 
+def replace_range(relative, start, end, new, note='', marker=None, remove=False):
+    """按「起止锚点」替换中间一整段，适合删掉一大块界面代码。
+
+    比整段精确匹配稳健：上游在这段内部加了几行也不影响。
+    start 与 end 必须各出现一次（end 在 start 之后）。
+    """
+    path = upstream / relative
+    if not path.is_file():
+        errors.append(f'{relative} 不存在（{note}）')
+        return
+    text = read(path)
+    if marker and marker in text:
+        return
+    index = text.find(start)
+    if index < 0:
+        if remove:
+            return
+        errors.append(f'{relative} 里找不到起始锚点（{note}）')
+        return
+    tail = text.find(end, index + len(start))
+    if tail < 0:
+        if remove:
+            return
+        errors.append(f'{relative} 里找不到结束锚点（{note}）')
+        return
+    write(path, text[:index] + new + text[tail + len(end):])
+    applied.append(f'{relative} — {note}')
+
+
+def replace_all_text(relative, old, new, note='', marker=None):
+    """把某个文件里出现的中文界面文案整体换掉（标识符里不会有中文，替换是安全的）。"""
+    path = upstream / relative
+    if not path.is_file():
+        warnings.append(f'{relative} 不存在（{note}）')
+        return
+    text = read(path)
+    if old not in text:
+        return
+    if marker and marker in text:
+        return
+    write(path, text.replace(old, new))
+    applied.append(f'{relative} — {note}')
+
+
 def apply_project_version():
     """版本号用本项目 version.txt 里的值，不跟随上游。"""
     if not version_file.is_file():
@@ -792,6 +836,327 @@ def main():
         note='去掉用户管理的跳转分支',
     )
 
+    # ---- 界面精简：顶栏只保留多选时的操作 ----
+    replace_range(
+        'lib/home_screen.dart',
+        '            actions: [\n              if (_selectionMode) ...[\n',
+        '              const SizedBox(width: 8),\n            ],\n          ),\n'
+        '          body: SafeArea(\n',
+        '            actions: _selectionMode\n'
+        '                ? [\n'
+        '                    TextButton(\n'
+        "                      key: const ValueKey('clear-catalog-selection'),\n"
+        '                      onPressed: _selectedDramas.isEmpty\n'
+        '                          ? null\n'
+        '                          : () => setState(_selectedDramas.clear),\n'
+        "                      child: const Text('清空'),\n"
+        '                    ),\n'
+        '                    TextButton(\n'
+        "                      key: const ValueKey('cancel-catalog-selection'),\n"
+        '                      onPressed: _cancelSelection,\n'
+        "                      child: const Text('取消'),\n"
+        '                    ),\n'
+        '                    const SizedBox(width: 8),\n'
+        '                  ]\n'
+        '                : const [],\n'
+        '          ),\n'
+        '          body: SafeArea(\n',
+        marker='actions: _selectionMode\n',
+        note='顶栏只保留多选时的操作',
+    )
+
+    # ---- 导航统一成四项：搜索 / 榜单 / 下载 / 设置 ----
+    # 大屏左侧的导航已经是四项，这里把电视端与窄屏的底部导航也改成一致
+    replace_range(
+        'lib/home_screen.dart',
+        '                          for (final entry in [\n',
+        '                          ].indexed)\n',
+        '                          for (final entry in [\n'
+        "                            (Icons.search_rounded, '搜索'),\n"
+        "                            (Icons.leaderboard_rounded, '榜单'),\n"
+        "                            (Icons.download_rounded, '下载'),\n"
+        "                            (Icons.settings_rounded, '设置'),\n"
+        '                          ].indexed)\n',
+        marker="(Icons.search_rounded, '搜索'),",
+        note='电视端导航改成四项',
+    )
+
+    replace_range(
+        'lib/home_screen.dart',
+        '                  destinations: [\n'
+        '                    NavigationDestination(\n'
+        '                      icon: Icon(Icons.explore_outlined),\n',
+        '                    if (widget.store.canDownload)\n'
+        '                      NavigationDestination(\n'
+        '                        icon: Icon(Icons.download_outlined),\n'
+        '                        selectedIcon: Icon(Icons.download_rounded),\n'
+        "                        label: '下载',\n"
+        '                      ),\n'
+        '                  ],\n',
+        '                  destinations: [\n'
+        '                    NavigationDestination(\n'
+        '                      icon: Icon(Icons.search_outlined),\n'
+        '                      selectedIcon: Icon(Icons.search_rounded),\n'
+        "                      label: '搜索',\n"
+        '                    ),\n'
+        '                    NavigationDestination(\n'
+        '                      icon: Icon(Icons.leaderboard_outlined),\n'
+        '                      selectedIcon: Icon(Icons.leaderboard_rounded),\n'
+        "                      label: '榜单',\n"
+        '                    ),\n'
+        '                    NavigationDestination(\n'
+        '                      icon: Icon(Icons.download_outlined),\n'
+        '                      selectedIcon: Icon(Icons.download_rounded),\n'
+        "                      label: '下载',\n"
+        '                    ),\n'
+        '                    NavigationDestination(\n'
+        '                      icon: Icon(Icons.settings_outlined),\n'
+        '                      selectedIcon: Icon(Icons.settings_rounded),\n'
+        "                      label: '设置',\n"
+        '                    ),\n'
+        '                  ],\n',
+        marker="                      label: '搜索',\n"
+        '                    ),\n'
+        '                    NavigationDestination(\n'
+        '                      icon: Icon(Icons.leaderboard_outlined),\n',
+        note='底部导航改成四项',
+    )
+
+    # ---- 设置页重构：去掉用不上的项，按用途分组 ----
+    replace_text(
+        'lib/settings_screen.dart',
+        "import 'app_theme.dart';\n",
+        "import 'app_theme.dart';\nimport 'dramafetch_settings.dart';\n",
+        marker="import 'dramafetch_settings.dart';",
+        note='引入设置分组标题',
+    )
+
+    replace_range(
+        'lib/settings_screen.dart',
+        "              ListTile(\n                key: const ValueKey('lan-settings'),\n",
+        '              ],\n              if (Platform.isIOS)\n',
+        "              const SettingsSectionTitle('下载'),\n"
+        '              if (widget.store.canDownload)\n'
+        '                ListTile(\n'
+        '                  leading: const Icon(Icons.folder_outlined),\n'
+        "                  title: const Text('下载目录'),\n"
+        "                  subtitle: const Text('查看存储用量、迁移已下载文件'),\n"
+        '                  trailing: const Icon(Icons.chevron_right_rounded),\n'
+        '                  onTap: () => Navigator.push(\n'
+        '                    context,\n'
+        '                    MaterialPageRoute<void>(\n'
+        '                      builder: (_) => StorageScreen(\n'
+        '                        repository: widget.repository,\n'
+        '                        store: widget.store,\n'
+        '                      ),\n'
+        '                    ),\n'
+        '                  ),\n'
+        '                ),\n'
+        '              if (widget.repository.supportsSourceManagement)\n'
+        '                ListTile(\n'
+        '                  leading: const Icon(Icons.dns_outlined),\n'
+        "                  title: const Text('下载渠道'),\n"
+        "                  subtitle: const Text('查看各渠道的可用状态与延迟'),\n"
+        '                  trailing: const Icon(Icons.chevron_right_rounded),\n'
+        '                  onTap: () => Navigator.push(\n'
+        '                    context,\n'
+        '                    MaterialPageRoute<void>(\n'
+        '                      builder: (_) => SourcesScreen(\n'
+        '                        repository: widget.repository,\n'
+        '                        store: widget.store,\n'
+        '                      ),\n'
+        '                    ),\n'
+        '                  ),\n'
+        '                ),\n'
+        '              if (widget.store.canDownload)\n'
+        '                ListTile(\n'
+        '                  leading: const Icon(Icons.tune_rounded),\n'
+        "                  title: const Text('下载偏好'),\n"
+        '                  subtitle: Text(widget.store.downloadPreferences.qualityLabel),\n'
+        '                  trailing: const Icon(Icons.chevron_right_rounded),\n'
+        '                  onTap: () => Navigator.push(\n'
+        '                    context,\n'
+        '                    MaterialPageRoute<void>(\n'
+        '                      builder: (_) =>\n'
+        '                          DownloadPreferencesScreen(store: widget.store),\n'
+        '                    ),\n'
+        '                  ),\n'
+        '                ),\n'
+        "              const SettingsSectionTitle('网络'),\n"
+        '              if (widget.store.profile.admin)\n'
+        '                ListTile(\n'
+        '                  leading: const Icon(Icons.settings_ethernet_rounded),\n'
+        "                  title: const Text('网络与并发'),\n"
+        "                  subtitle: const Text('代理、请求间隔与下载并发'),\n"
+        '                  trailing: const Icon(Icons.chevron_right_rounded),\n'
+        '                  onTap: () => Navigator.push(\n'
+        '                    context,\n'
+        '                    MaterialPageRoute<void>(\n'
+        '                      builder: (_) => ResourceSettingsScreen(\n'
+        '                        repository: widget.repository,\n'
+        '                        store: widget.store,\n'
+        '                      ),\n'
+        '                    ),\n'
+        '                  ),\n'
+        '                ),\n'
+        "              const SettingsSectionTitle('外观'),\n"
+        '              ListTile(\n'
+        "                key: const ValueKey('theme-setting'),\n"
+        '                leading: const Icon(Icons.palette_outlined),\n'
+        "                title: const Text('外观主题'),\n"
+        '                subtitle: Text(AppTheme.label(widget.store.themeMode)),\n'
+        '                trailing: const Icon(Icons.chevron_right_rounded),\n'
+        '                onTap: _chooseTheme,\n'
+        '              ),\n'
+        "              const SettingsSectionTitle('关于'),\n"
+        '              ListTile(\n'
+        '                leading: const Icon(Icons.system_update_alt_rounded),\n'
+        "                title: const Text('检查更新'),\n"
+        "                subtitle: const Text('获取新版本，可切换加速源'),\n"
+        '                trailing: const Icon(Icons.chevron_right_rounded),\n'
+        '                onTap: () => Navigator.push(\n'
+        '                  context,\n'
+        '                  MaterialPageRoute<void>(\n'
+        '                    builder: (_) =>\n'
+        '                        UpdateScreen(repository: widget.repository),\n'
+        '                  ),\n'
+        '                ),\n'
+        '              ),\n'
+        '              ListTile(\n'
+        '                leading: const Icon(Icons.folder_open_rounded),\n'
+        "                title: const Text('查看运行日志'),\n"
+        "                subtitle: const Text('排查问题时，把日志目录里的文件发出来'),\n"
+        '                onTap: _busy ? null : _openLogs,\n'
+        '              ),\n'
+        '              if (Platform.isIOS)\n',
+        marker='SettingsSectionTitle(',
+        note='设置页重构',
+    )
+
+    # ---- 详情页去掉追剧入口 ----
+    replace_range(
+        'lib/detail_screen.dart',
+        '        PopupMenuButton<String>(\n'
+        "          key: const ValueKey('follow-status'),\n",
+        '                const Icon(Icons.expand_more_rounded, size: 18),\n'
+        '              ],\n'
+        '            ),\n'
+        '          ),\n'
+        '        ),\n',
+        '',
+        remove=True,
+        note='详情页去掉追剧按钮',
+    )
+
+    # ---- 文案统一：站源改叫下载渠道 ----
+    for _file in (
+        'lib/home_screen.dart',
+        'lib/models.dart',
+        'lib/downloads_screen.dart',
+        'lib/detail_screen.dart',
+        'lib/rankings_screen.dart',
+        'lib/resource_settings_screen.dart',
+        'lib/profiles_screen.dart',
+        'lib/dramafetch_home.dart',
+        'lib/dramafetch_nav.dart',
+    ):
+        replace_all_text(_file, '站源', '下载渠道', note='文案改为下载渠道')
+
+    replace_all_text('lib/models.dart', "'红果'", "'果子'", note='站源名称改为果子')
+
+    # 界面里不再出现旧叫法，统一成下载渠道
+    for _file in (
+        'lib/resource_settings_screen.dart',
+        'lib/resource_settings.dart',
+        'lib/core_bridge.dart',
+        'lib/recommendations_screen.dart',
+        'lib/home_screen.dart',
+        'lib/detail_screen.dart',
+        'lib/downloads_screen.dart',
+    ):
+        replace_all_text(_file, '红果下载方式', '下载渠道', note='下载方式改叫下载渠道')
+        replace_all_text(_file, '红果', '果子', note='去掉旧站源叫法')
+
+    # ---- 运行日志：请求记录与打开日志目录 ----
+    replace_text(
+        'native/core/app_runtime.go',
+        'func nativeDispatch(input nativeInput) (any, error) {\n'
+        '\tif err := nativeAuthorizeInput(input); err != nil {\n',
+        'func nativeDispatch(input nativeInput) (any, error) {\n'
+        '\t// 本项目新增：把每次请求的动作记进日志，方便排查问题\n'
+        '\tdfLog("请求", input.Action, input.Command, input.Query)\n'
+        '\tif err := nativeAuthorizeInput(input); err != nil {\n',
+        marker='dfLog("请求", input.Action, input.Command, input.Query)',
+        note='请求写入日志',
+    )
+
+
+    replace_text(
+        'lib/settings_screen.dart',
+        '  Future<void> _chooseTheme(',
+        '  Future<void> _openLogs() async {\n'
+        '    try {\n'
+        '      await widget.repository.openLogs();\n'
+        '    } catch (error) {\n'
+        '      if (mounted) setState(() => _message = error.toString());\n'
+        '    }\n'
+        '  }\n'
+        '\n'
+        '  Future<void> _chooseTheme(',
+        marker='Future<void> _openLogs(',
+        note='设置页加入打开日志目录',
+    )
+
+    # ---- 最近打开：换成记录点开过的剧 ----
+    replace_text(
+        'lib/local_store.dart',
+        '  Future<void> clearRecentSearches() => _setting(_key(\'recentSearches\'), \'[]\');\n',
+        '  Future<void> clearRecentSearches() => _setting(_key(\'recentSearches\'), \'[]\');\n'
+        '\n'
+        '  /// 本项目改造：记录的是真正点开过的剧，而不是搜索词。\n'
+        '  /// 每条存成「编号 :: 标题」，点一下就能直接回到那部剧。\n'
+        '  List<Map<String, String>> get recentOpened {\n'
+        '    if (locked) return const [];\n'
+        '    try {\n'
+        '      final raw = jsonDecode(_string(_key(\'recentOpened\')) ?? \'[]\') as List;\n'
+        '      return [\n'
+        '        for (final entry in raw.whereType<String>().take(20))\n'
+        '          if (entry.contains(\'::\'))\n'
+        '            {\n'
+        '              \'id\': entry.split(\'::\').first,\n'
+        '              \'title\': entry.split(\'::\').skip(1).join(\'::\'),\n'
+        '            },\n'
+        '      ];\n'
+        '    } catch (_) {\n'
+        '      return const [];\n'
+        '    }\n'
+        '  }\n'
+        '\n'
+        '  Future<void> rememberOpened(String id, String title) {\n'
+        '    final cleanID = id.trim();\n'
+        '    if (cleanID.isEmpty) return Future.value();\n'
+        '    final cleanTitle = title.trim().replaceAll(\'::\', \' \');\n'
+        '    final entry = \'$cleanID::$cleanTitle\';\n'
+        '    final epoch = _epoch;\n'
+        '    return _queue(() async {\n'
+        '      if (locked || epoch != _epoch) return;\n'
+        '      final entries = [\n'
+        '        entry,\n'
+        '        ...(jsonDecode(_string(_key(\'recentOpened\')) ?? \'[]\') as List)\n'
+        '            .whereType<String>()\n'
+        '            .where((item) => !item.startsWith(\'$cleanID::\')),\n'
+        '      ].take(20).toList();\n'
+        '      await _commit({_key(\'recentOpened\'): jsonEncode(entries)});\n'
+        '      _notify();\n'
+        '    });\n'
+        '  }\n'
+        '\n'
+        '  Future<void> clearRecentOpened() =>\n'
+        '      _setting(_key(\'recentOpened\'), \'[]\');\n',
+        marker='List<Map<String, String>> get recentOpened',
+        note='记录打开过的剧',
+    )
+
     # ---- 自动更新：注册更新动作 ----
     replace_text(
         'native/core/app_runtime.go',
@@ -811,6 +1176,8 @@ def main():
         '  Future<ResourceSettings> resourceSettings() async => const ResourceSettings();\n'
         '  Future<Map<String, dynamic>> probeUpdate() async =>\n'
         "      throw AppFailure('当前环境不支持检查更新');\n"
+        '  Future<void> openLogs() async =>\n'
+        "      throw AppFailure('当前环境不支持打开日志目录');\n"
         '  Future<Map<String, dynamic>> checkUpdate({String mirror = \'\'}) async =>\n'
         "      throw AppFailure('当前环境不支持检查更新');\n"
         '  Future<Map<String, dynamic>> downloadUpdate({String mirror = \'\'}) async =>\n'
@@ -848,6 +1215,12 @@ def main():
         "  Future<Map<String, dynamic>> checkUpdate({String mirror = ''}) async {\n"
         '    _adminPermission();\n'
         "    return _call({'action': 'update', 'command': 'check', 'query': mirror});\n"
+        '  }\n'
+        '\n'
+        '  @override\n'
+        '  Future<void> openLogs() async {\n'
+        '    _adminPermission();\n'
+        "    await _call({'action': 'update', 'command': 'openLogs'});\n"
         '  }\n'
         '\n'
         '  @override\n'

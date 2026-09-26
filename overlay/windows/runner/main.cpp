@@ -70,10 +70,10 @@ void ComputeWindowBounds(Win32Window::Point* origin, Win32Window::Size* size) {
       (work_area.bottom - work_area.top) / scale;
 
   // 以较小的窗口打开，够用即可；上限避免在超大屏上开出一个过宽的窗口
-  int width = static_cast<int>(logical_width * 0.78);
-  int height = static_cast<int>(logical_height * 0.80);
-  width = std::clamp(width, 1000, 1280);
-  height = std::clamp(height, 640, 860);
+  int width = static_cast<int>(logical_width * 0.68);
+  int height = static_cast<int>(logical_height * 0.72);
+  width = std::clamp(width, 940, 1120);
+  height = std::clamp(height, 600, 740);
   if (width > logical_width) width = static_cast<int>(logical_width);
   if (height > logical_height) height = static_cast<int>(logical_height);
 

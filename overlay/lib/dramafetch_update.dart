@@ -208,18 +208,26 @@ class _UpdateDialogState extends State<_UpdateDialog> {
               ),
               const SizedBox(height: 16),
               if (manager.notes.trim().isNotEmpty) ...[
-                Text('更新内容', style: AppTheme.section(context)),
-                const SizedBox(height: 8),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 220),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      manager.notes.trim(),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        height: 1.6,
-                        color: scheme.onSurface,
+                Theme(
+                  data: theme.copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: const EdgeInsets.only(bottom: 8),
+                    title: Text('更新内容', style: AppTheme.section(context)),
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainer,
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusCard,
+                          ),
+                          border: Border.all(color: scheme.outlineVariant),
+                        ),
+                        child: MarkdownText(manager.notes.trim()),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ],
@@ -369,4 +377,142 @@ String _progressLabel(Map<String, dynamic> progress) {
       ? '已下载 ${size(received)}'
       : '已下载 ${size(received)} / ${size(total)}';
   return threads > 1 ? '$base · $threads 线程' : base;
+}
+
+/// 极简 Markdown 渲染：标题、列表、粗体、行内代码、分隔线。
+///
+/// 更新说明来自发布页，格式比较固定，自己渲染一份就够了，不必为此引入额外依赖。
+class MarkdownText extends StatelessWidget {
+  const MarkdownText(this.source, {super.key});
+
+  final String source;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final base = TextStyle(fontSize: 13, height: 1.65, color: scheme.onSurface);
+    final rows = <Widget>[];
+
+    for (final raw in source.split('\n')) {
+      final line = raw.trimRight();
+      if (line.trim().isEmpty) {
+        rows.add(const SizedBox(height: 8));
+        continue;
+      }
+      if (RegExp(r'^\s*(-{3,}|\*{3,})\s*$').hasMatch(line)) {
+        rows.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Divider(height: 1, color: scheme.outlineVariant),
+          ),
+        );
+        continue;
+      }
+      final heading = RegExp(r'^(#{1,4})\s+(.*)$').firstMatch(line);
+      if (heading != null) {
+        final level = heading.group(1)!.length;
+        rows.add(
+          Padding(
+            padding: EdgeInsets.only(
+              top: rows.isEmpty ? 0 : 12,
+              bottom: 4,
+            ),
+            child: Text(
+              heading.group(2)!.trim(),
+              style: base.copyWith(
+                fontSize: level <= 2 ? 15 : 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+      final bullet = RegExp(r'^\s*[-*+]\s+(.*)$').firstMatch(line);
+      if (bullet != null) {
+        rows.add(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 7, right: 8),
+                child: Container(
+                  width: 4,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: scheme.onSurfaceVariant,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              Expanded(child: Text.rich(_inline(context, bullet.group(1)!, base))),
+            ],
+          ),
+        );
+        continue;
+      }
+      final numbered = RegExp(r'^\s*(\d+)\.\s+(.*)$').firstMatch(line);
+      if (numbered != null) {
+        rows.add(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 22,
+                child: Text(
+                  '${numbered.group(1)}.',
+                  style: base.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ),
+              Expanded(
+                child: Text.rich(_inline(context, numbered.group(2)!, base)),
+              ),
+            ],
+          ),
+        );
+        continue;
+      }
+      rows.add(Text.rich(_inline(context, line.trim(), base)));
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
+  }
+
+  /// 处理行内的 **粗体** 与 `代码`。
+  TextSpan _inline(BuildContext context, String text, TextStyle base) {
+    final scheme = Theme.of(context).colorScheme;
+    final spans = <TextSpan>[];
+    final pattern = RegExp(r'\*\*(.+?)\*\*|`(.+?)`');
+    var index = 0;
+    for (final match in pattern.allMatches(text)) {
+      if (match.start > index) {
+        spans.add(TextSpan(text: text.substring(index, match.start)));
+      }
+      final bold = match.group(1);
+      final code = match.group(2);
+      if (bold != null) {
+        spans.add(
+          TextSpan(
+            text: bold,
+            style: base.copyWith(fontWeight: FontWeight.w700),
+          ),
+        );
+      } else if (code != null) {
+        spans.add(
+          TextSpan(
+            text: code,
+            style: base.copyWith(
+              fontFamily: 'Consolas',
+              backgroundColor: scheme.surfaceContainerHighest,
+            ),
+          ),
+        );
+      }
+      index = match.end;
+    }
+    if (index < text.length) {
+      spans.add(TextSpan(text: text.substring(index)));
+    }
+    return TextSpan(style: base, children: spans);
+  }
 }

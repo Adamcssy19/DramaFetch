@@ -75,6 +75,10 @@ func (engine *nativeEngine) nativeUpdate(ctx context.Context, input nativeInput)
 		return dramaFetchUpdateStatus(), nil
 	case "launch":
 		return launchDramaFetchInstaller()
+	case "openLogs":
+		return openDramaFetchLogs()
+	case "channels":
+		return channelProbePayload(ctx, true), nil
 	default:
 		return nil, errors.New("更新请求无效")
 	}

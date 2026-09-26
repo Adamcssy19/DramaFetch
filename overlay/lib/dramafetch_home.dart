@@ -12,8 +12,12 @@ import 'widgets.dart';
 
 /// 首页：打开软件第一眼就是搜索。
 ///
-/// 搜索框下面是之前搜过的关键词，点一下就能再搜一次；输入后以海报墙的方式给出结果。
-/// 打开软件时会自动做一次更新检查（先测速选源），有新版本就弹窗提示。
+/// 搜索支持三种输入：
+/// - 剧名关键词，走目录搜索
+/// - 剧集编号（纯数字），直接打开详情
+/// - 播放页链接，从链接里取出编号后直接打开
+///
+/// 下面列出的是**点开过的剧**，点一下直接回到那部剧；只是搜过没点开的不记。
 class DramaFetchHome extends StatefulWidget {
   const DramaFetchHome({
     super.key,
@@ -60,6 +64,9 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
     super.dispose();
   }
 
+  String get _sourceID =>
+      widget.store.sources.isEmpty ? 'hongguo' : widget.store.sources.first.id;
+
   /// 打开软件后稍等片刻再做更新检查，避免和首屏加载抢资源。
   void _scheduleAutoCheck() {
     unawaited(
@@ -71,6 +78,22 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
         await showUpdateDialog(context, manager);
       }),
     );
+  }
+
+  void _open(Drama drama) {
+    unawaited(widget.store.rememberOpened(drama.id, drama.title));
+    widget.onOpen(drama);
+  }
+
+  /// 从输入里提取剧集编号：纯数字，或链接里的长数字串。
+  String? _extractDramaID(String input) {
+    final text = input.trim();
+    if (RegExp(r'^\d{8,}$').hasMatch(text)) return text;
+    if (!text.contains('/') && !text.toLowerCase().contains('http')) {
+      return null;
+    }
+    final match = RegExp(r'(\d{10,})').firstMatch(text);
+    return match?.group(1);
   }
 
   void _onChanged(String value) {
@@ -85,15 +108,24 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
       });
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 400), () => _search(query));
+    _debounce = Timer(const Duration(milliseconds: 400), () => _submit(query));
+  }
+
+  /// 统一入口：编号或链接直接打开，其余当关键词搜索。
+  Future<void> _submit(String raw) async {
+    final query = raw.trim();
+    if (query.isEmpty) return;
+    final direct = _extractDramaID(query);
+    if (direct != null) {
+      _open(Drama(id: direct, source: _sourceID, title: direct));
+      return;
+    }
+    await _search(query);
   }
 
   Future<void> _search(String query) async {
-    final source = widget.store.sources.isEmpty
-        ? ''
-        : widget.store.sources.first.id;
-    if (source.isEmpty) {
-      setState(() => _error = '暂无可用站源');
+    if (widget.store.sources.isEmpty) {
+      setState(() => _error = '暂无可用下载渠道');
       return;
     }
     setState(() {
@@ -101,9 +133,8 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
       _error = null;
       _submitted = query;
     });
-    unawaited(widget.store.rememberSearch(query));
     try {
-      final page = await widget.repository.catalog(source, query: query);
+      final page = await widget.repository.catalog(_sourceID, query: query);
       if (!mounted) return;
       setState(() => _results = page.items);
     } catch (error) {
@@ -113,17 +144,11 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
     }
   }
 
-  void _useKeyword(String keyword) {
-    _input.text = keyword;
-    _input.selection = TextSelection.collapsed(offset: keyword.length);
-    unawaited(_search(keyword));
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final history = widget.store.recentSearches;
+    final opened = widget.store.recentOpened;
     final typing = _input.text.trim().isNotEmpty;
     final updates = _updates;
 
@@ -143,45 +168,24 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
               ),
             Text('搜索', style: AppTheme.title(context)),
             const SizedBox(height: 6),
-            Text('输入剧名即可查找，结果会随输入实时更新', style: AppTheme.caption(context)),
+            Text(
+              '输剧名、剧集编号，或直接粘贴播放页链接',
+              style: AppTheme.caption(context),
+            ),
             const SizedBox(height: 20),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 560),
-              child: TextField(
+              child: _SearchBox(
                 controller: _input,
                 focusNode: _focus,
-                autofocus: true,
-                style: theme.textTheme.bodyMedium,
                 onChanged: (value) => setState(() => _onChanged(value)),
-                onSubmitted: (value) {
-                  final query = value.trim();
-                  if (query.isNotEmpty) unawaited(_search(query));
+                onSubmitted: (value) => unawaited(_submit(value)),
+                onClear: () {
+                  _input.clear();
+                  setState(() => _onChanged(''));
+                  _focus.requestFocus();
                 },
-                decoration: InputDecoration(
-                  hintText: '搜索想看的剧',
-                  isDense: true,
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
-                    size: 18,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 38,
-                    minHeight: 20,
-                  ),
-                  suffixIcon: !typing
-                      ? null
-                      : IconButton(
-                          tooltip: '清空',
-                          iconSize: 16,
-                          icon: const Icon(Icons.close_rounded),
-                          onPressed: () {
-                            _input.clear();
-                            setState(() => _onChanged(''));
-                            _focus.requestFocus();
-                          },
-                        ),
-                ),
+                showClear: typing,
               ),
             ),
             if (_loading) ...[
@@ -196,31 +200,31 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
               const SizedBox(height: 32),
               Row(
                 children: [
-                  Text('最近搜索', style: AppTheme.section(context)),
+                  Text('最近打开', style: AppTheme.section(context)),
                   const Spacer(),
-                  if (history.isNotEmpty)
+                  if (opened.isNotEmpty)
                     TextButton(
                       onPressed: () =>
-                          unawaited(widget.store.clearRecentSearches()),
+                          unawaited(widget.store.clearRecentOpened()),
                       child: const Text('清空记录'),
                     ),
                 ],
               ),
-              const SizedBox(height: 10),
-              if (history.isEmpty)
-                Text('还没有搜索记录', style: AppTheme.caption(context))
+              const SizedBox(height: 6),
+              if (opened.isEmpty)
+                Text('还没有打开过任何剧', style: AppTheme.caption(context))
               else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final keyword in history)
-                      _KeywordButton(
-                        keyword: keyword,
-                        onTap: () => _useKeyword(keyword),
+                for (final entry in opened)
+                  _OpenedRow(
+                    title: entry['title'] ?? '',
+                    onTap: () => _open(
+                      Drama(
+                        id: entry['id'] ?? '',
+                        source: _sourceID,
+                        title: entry['title'] ?? '',
                       ),
-                  ],
-                ),
+                    ),
+                  ),
             ],
             if (typing && _results.isNotEmpty) ...[
               const SizedBox(height: 28),
@@ -233,7 +237,7 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
                 items: _results,
                 repository: widget.repository,
                 width: constraints.maxWidth,
-                onOpen: widget.onOpen,
+                onOpen: _open,
               ),
             ],
             if (typing && !_loading && _results.isEmpty && _error == null) ...[
@@ -256,6 +260,176 @@ class _DramaFetchHomeState extends State<DramaFetchHome> {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 深色描边搜索框，照着 Uiverse 上那款样式做的：
+/// 深灰底、2 像素描边、圆角 5，聚焦时描边与文字转青色，并在左上方带一层青色光晕。
+class _SearchBox extends StatefulWidget {
+  const _SearchBox({
+    required this.controller,
+    required this.focusNode,
+    required this.onChanged,
+    required this.onSubmitted,
+    required this.onClear,
+    required this.showClear,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSubmitted;
+  final VoidCallback onClear;
+  final bool showClear;
+
+  @override
+  State<_SearchBox> createState() => _SearchBoxState();
+}
+
+class _SearchBoxState extends State<_SearchBox> {
+  static const _fill = Color(0xFF212121);
+  static const _cyan = Color(0xFF00FFFF);
+  static const _stroke = Color(0xFFFFFFFF);
+
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_onFocusChanged);
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (!mounted) return;
+    setState(() => _focused = widget.focusNode.hasFocus);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 100),
+      curve: Curves.easeOut,
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: _fill,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: _focused ? _cyan : _stroke, width: 2),
+        boxShadow: _focused
+            ? [
+                BoxShadow(
+                  color: _cyan.withValues(alpha: 0.85),
+                  offset: const Offset(-3, -3),
+                  blurRadius: 15,
+                ),
+              ]
+            : null,
+      ),
+      child: TextField(
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+        autofocus: true,
+        cursorColor: _focused ? _cyan : _stroke,
+        style: TextStyle(
+          fontSize: 14,
+          color: _focused ? _cyan : _stroke,
+        ),
+        decoration: InputDecoration(
+          hintText: '搜索想看的剧',
+          hintStyle: const TextStyle(color: Color(0xFF9E9E9E), fontSize: 14),
+          isDense: true,
+          filled: false,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          suffixIcon: !widget.showClear
+              ? null
+              : IconButton(
+                  tooltip: '清空',
+                  iconSize: 16,
+                  color: _focused ? _cyan : _stroke,
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: widget.onClear,
+                ),
+        ),
+        onChanged: widget.onChanged,
+        onSubmitted: widget.onSubmitted,
+      ),
+    );
+  }
+}
+
+/// 最近打开过的一部剧。
+class _OpenedRow extends StatefulWidget {
+  const _OpenedRow({required this.title, required this.onTap});
+
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  State<_OpenedRow> createState() => _OpenedRowState();
+}
+
+class _OpenedRowState extends State<_OpenedRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 130),
+          curve: Curves.easeOut,
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          margin: const EdgeInsets.only(bottom: 2),
+          decoration: BoxDecoration(
+            color: _hovered
+                ? theme.colorScheme.surfaceContainer
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppTheme.radiusControl),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.history_rounded,
+                size: 16,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.title.isEmpty ? '未命名' : widget.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -360,7 +534,7 @@ class _ResultCardState extends State<_ResultCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              drama.title,
+              drama.title.isEmpty ? '未命名' : drama.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -379,52 +553,6 @@ class _ResultCardState extends State<_ResultCard> {
               ),
             ],
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 最近搜索的关键词按钮，样式贴近系统里的次要按钮。
-class _KeywordButton extends StatefulWidget {
-  const _KeywordButton({required this.keyword, required this.onTap});
-
-  final String keyword;
-  final VoidCallback onTap;
-
-  @override
-  State<_KeywordButton> createState() => _KeywordButtonState();
-}
-
-class _KeywordButtonState extends State<_KeywordButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOut,
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _hovered
-                ? theme.colorScheme.surfaceContainerHigh
-                : theme.colorScheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(AppTheme.radiusControl),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-          ),
-          child: Text(
-            widget.keyword,
-            style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
-          ),
         ),
       ),
     );
