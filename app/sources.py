@@ -190,30 +190,6 @@ async def fetchRawFile(
     return source
 
 
-async def probeDownloadUrl(repo: Repo, tag: str, asset: str) -> str:
-    async def probe(source):
-        url = buildDownloadUrl(repo, tag, asset, source=source)
-        client = buildClient(headers={"Range": "bytes=0-0"}, timeout=10)
-        try:
-            resp = await client.get(url)
-            try:
-                resp.raise_for_status()
-                return url
-            finally:
-                resp.close()
-        except Exception as e:
-            logger.debug("从 {} 下载 {}/{} 失败: {}", source, repo.name, asset, repr(e))
-            raise
-        finally:
-            client.close()
-
-    result, index, _ = await staggered_race(
-        [lambda s=s: probe(s) for s in repo.buildSources()], STAGGER_DELAY)
-    if index is None:
-        raise TaskError("无法下载 {name}/{tag}/{asset}", name=repo.name, tag=tag, asset=asset)
-    return result
-
-
 # ── GitHub 加速镜像：对 release 资产直链做前缀代理 ──
 
 MIRROR_PREFIXES: dict[str, str] = {
