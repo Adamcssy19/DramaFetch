@@ -126,14 +126,6 @@ class MainWindow(MSFluentWindow):
     def _initLayout(self) -> None:
         self._addPage(TaskPage, FluentIcon.DOWNLOAD, self.tr("下载任务"),
                       NavigationItemPosition.TOP)
-        self.navigationInterface.addItem(
-            routeKey="addTaskButton",
-            text=self.tr("新建任务"),
-            selectable=False,
-            icon=FluentIcon.ADD,
-            onClick=lambda: self.addUrls([]),
-            position=NavigationItemPosition.TOP,
-        )
         self._addPage(SettingPage, FluentIcon.SETTING, self.tr("设置"),
                       NavigationItemPosition.BOTTOM)
         self._showPage(TaskPage)
