@@ -29,6 +29,19 @@ CATEGORY_ROUTES: list[tuple[str, str]] = [
     ("comic", "动漫"),
 ]
 
+RANK_ROUTES: list[tuple[str, str]] = [
+    ("hot-drama", "红果热播榜"),
+    ("hot-real-drama", "真人剧热播榜"),
+    ("hot-comic-drama", "漫剧热播榜"),
+    ("hot-ai-drama", "AI剧热播榜"),
+]
+
+# 榜单页只对普通浏览器 UA 返回空壳（数据由前端再拉），
+# 爬虫 UA 会直接服务端渲染出完整 rankList，因此榜单请求走爬虫 UA。
+CRAWLER_UA = (
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+)
+
 _NUMERIC_ID = re.compile(r"^\d{6,}$")
 
 
@@ -60,8 +73,8 @@ def isNumericId(text: str) -> bool:
     return bool(_NUMERIC_ID.match((text or "").strip()))
 
 
-async def _getText(path: str) -> str:
-    client = buildClient(userAgent=BROWSER_UA, timeout=20)
+async def _getText(path: str, userAgent: str = BROWSER_UA) -> str:
+    client = buildClient(userAgent=userAgent, timeout=20)
     try:
         response = await client.get(BASE + path, headers={"accept": "text/html"})
         try:
@@ -191,6 +204,50 @@ async def category(route: str, page: int = 1, categoryName: str = "") -> tuple[l
             out.append(drama)
     try:
         totalPages = int((data.get("pagination") or {}).get("totalPages") or 1)
+    except (TypeError, ValueError):
+        totalPages = 1
+    return out, totalPages
+
+
+def rankItemToDrama(item: dict) -> Drama | None:
+    if not isinstance(item, dict):
+        return None
+    seriesId = str(item.get("seriesId") or item.get("id") or "")
+    if not isNumericId(seriesId):
+        return None
+    remarkParts: list[str] = []
+    if item.get("rank") is not None:
+        remarkParts.append(f"第{item['rank']}名")
+    for key in ("heatText", "scoreText"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            remarkParts.append(value)
+    tags = [str(t) for t in (item.get("tags") or []) if str(t).strip()]
+    return Drama(
+        seriesId=seriesId,
+        title=str(item.get("title") or seriesId),
+        cover=str(item.get("cover") or ""),
+        intro=str(item.get("description") or ""),
+        remark=" · ".join(remarkParts),
+        category="/".join(tags[:3]) if tags else "榜单",
+    )
+
+
+async def rank(route: str, page: int = 1) -> tuple[list[Drama], int]:
+    raw = await _getText(
+        f"/rank/{quote(route)}?page={max(1, page)}", userAgent=CRAWLER_UA)
+    data = loaderPage(parseRouterData(raw), f"rank_{route}/page", f"rank_{route}", "rank_")
+    content = data.get("content") if isinstance(data.get("content"), dict) else data
+    rows = content.get("rankList") or []
+    out: list[Drama] = []
+    seen: set[str] = set()
+    for row in rows:
+        drama = rankItemToDrama(row)
+        if drama and drama.seriesId not in seen:
+            seen.add(drama.seriesId)
+            out.append(drama)
+    try:
+        totalPages = int((content.get("pagination") or {}).get("totalPages") or 1)
     except (TypeError, ValueError):
         totalPages = 1
     return out, totalPages
