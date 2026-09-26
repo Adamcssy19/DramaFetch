@@ -85,6 +85,26 @@ def apply_project_version():
     if updated != text:
         write(target, updated)
         applied.append(f'pubspec.yaml（版本号设为本项目的 {version}）')
+
+    # 上游把版本号也硬编码在界面用的常量里，一并同步，
+    # 否则应用内「检查更新」会拿上游的版本号去和发布页比较。
+    layout = upstream / 'lib' / 'app_layout.dart'
+    if layout.is_file():
+        layout_text = layout.read_text(encoding='utf-8')
+        layout_updated, layout_count = re.subn(
+            r"^const appVersion = '[^']*';\s*$",
+            f"const appVersion = '{version}';",
+            layout_text,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if layout_count == 1:
+            if layout_updated != layout_text:
+                write(layout, layout_updated)
+                applied.append(f'app_layout.dart（版本号同步为 {version}）')
+        else:
+            warnings.append('app_layout.dart 里找不到 appVersion 常量，界面可能显示错误的当前版本')
+
     return version
 
 
@@ -368,14 +388,6 @@ def main():
         '                      : _tab == 2\n',
         marker='DramaFetchHome(',
         note='首页换成搜索页',
-    )
-
-    replace_text(
-        'lib/home_screen.dart',
-        '                          history: _tab == 2,\n',
-        '                          history: true,\n',
-        marker='history: true,',
-        note='最近观看固定为历史',
     )
 
     # 删掉用户管理入口（本项目不做多用户）
