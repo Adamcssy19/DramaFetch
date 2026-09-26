@@ -263,7 +263,8 @@ class Config(QConfig):
         backgroundEffect = OptionsConfigItem(
             "Personalization", "BackgroundEffect",
             "None" if isWin10() else "Mica",
-            OptionsValidator(["Acrylic", "Mica", "MicaAlt", "Aero", "None"]),
+            # Aero 固定浅色磨砂底，深色模式下整窗发白无法修复，故移除
+            OptionsValidator(["Acrylic", "Mica", "MicaAlt", "None"]),
         )
     elif sys.platform == "darwin":
         backgroundEffect = OptionsConfigItem(

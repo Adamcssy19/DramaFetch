@@ -126,7 +126,7 @@ class SettingPage(ScrollArea):
                 ComboBoxSettingCard(cfg.backgroundEffect, FluentIcon.TRANSPARENT,
                                     self.tr("窗口背景透明材质"),
                                     self.tr("设置窗口背景透明效果和透明材质"),
-                                    texts=["Acrylic", "Mica", "MicaAlt", "Aero", "None"]),
+                                    texts=["Acrylic", "Mica", "MicaAlt", "None"]),
             )
         elif sys.platform == "darwin":
             personalCards.append(

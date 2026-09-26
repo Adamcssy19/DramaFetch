@@ -558,13 +558,6 @@ class MainWindow(MSFluentWindow):
         elif value == "MicaAlt":
             self.setStyleSheet("background-color: transparent")
             self.windowEffect.setMicaEffect(self.winId(), isDark, isAlt=True)
-        elif value == "Aero":
-            self.setStyleSheet("background-color: transparent")
-            self.windowEffect.setAeroEffect(self.winId())
-            if isLessThanWin10():
-                self.titleBar.closeBtn.hide()
-                self.titleBar.minBtn.hide()
-                self.titleBar.maxBtn.hide()
         elif value == "None":
             if isWin10():
                 self.windowEffect.accentPolicy.AccentState = ACCENT_STATE.ACCENT_ENABLE_GRADIENT.value
