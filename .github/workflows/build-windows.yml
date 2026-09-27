@@ -82,6 +82,8 @@ jobs:
           # 避免产出「装完打不开」的安装包。
           uv run python scripts/check_imports.py
           uv run python scripts/check_startup.py
+          # CENC 解密不变量（IV 长度 / stco 平移 / 加密标记清除）
+          uv run pytest tests/test_cenc_offsets.py -q
 
       - name: Build with Nuitka
         shell: pwsh

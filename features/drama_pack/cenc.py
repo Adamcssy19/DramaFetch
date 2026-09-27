@@ -14,7 +14,8 @@ from base64 import b64decode
 
 from Crypto.Cipher import AES
 
-_CONTAINER = {"moov", "trak", "mdia", "minf", "stbl", "stsd", "edts", "dinf", "udta", "meta"}
+_CONTAINER = {"moov", "trak", "mdia", "minf", "stbl", "stsd", "edts", "dinf", "udta", "meta",
+              "sinf", "schi"}
 
 
 def hongguoContentKey(value: str) -> bytes:
@@ -145,6 +146,28 @@ def _parseSenc(data, box, ivSize) -> list:
     return entries
 
 
+def _resolveIvSize(data, sencBox, tencIvSize: int) -> int:
+    """确定每个 sample 的 IV 长度。
+
+    优先用 senc 自身的尺寸反推：未启用子样本时，
+    (box size - 头 - 8) / sampleCount 就是每条 IV 的字节数（只能是 8 或 16）。
+    这比读 tenc 更可靠 —— tenc 埋在 sinf/schi 里，盒子遍历容易漏掉，
+    一旦取不到就会退化成默认值，把整条 IV 序列读错位（表现为视频黑屏）。
+
+    红果实际用的是 8 字节 IV，而格式默认值常被写成 16，两者差一个字节
+    就会错位，所以这里以 senc 反推为准、tenc 仅作兜底。
+    """
+    if sencBox is not None:
+        base = sencBox["off"] + sencBox["hdr"]
+        flags = struct.unpack_from(">I", data, base)[0] & 0x00FFFFFF
+        count = struct.unpack_from(">I", data, base + 4)[0]
+        if count and not (flags & 0x02):
+            per = (sencBox["size"] - sencBox["hdr"] - 8) // count
+            if per in (8, 16):
+                return per
+    return tencIvSize if tencIvSize in (8, 16) else 16
+
+
 def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
     """就地解密 CENC 加密的 MP4 字节，返回可播放的完整 MP4。"""
     total = len(data)
@@ -153,11 +176,13 @@ def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
     if moov is None:
         raise ValueError("MP4 中没有 moov box")
 
-    # 默认 IV 长度：tenc 的 default_IV_size（8 或 16），缺失时按 16 处理
-    ivSize = 16
+    # tenc 提供 default_Per_Sample_IV_Size：box 头之后是
+    # version(1)+flags(3) | reserved(1) | pattern(1) | isProtected(1) | IVSize(1)
+    # 所以 IVSize 在 hdr+7。
+    tencIvSize = 0
     for box in _walk(top):
-        if box["typ"] == "tenc":
-            ivSize = data[box["off"] + box["hdr"] + 5]
+        if box["typ"] == "tenc" and box["size"] >= box["hdr"] + 8:
+            tencIvSize = data[box["off"] + box["hdr"] + 7]
             break
 
     tracks = []
@@ -191,8 +216,10 @@ def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
                 offs.append(off)
                 off += sizes[si]
                 si += 1
+        ivSize = _resolveIvSize(data, senc, tencIvSize)
         sencEntries = _parseSenc(data, senc, ivSize) if senc else []
-        tracks.append({"sizes": sizes, "offs": offs, "senc": sencEntries})
+        tracks.append({"sizes": sizes, "offs": offs, "senc": sencEntries,
+                       "ivSize": ivSize})
 
     for track in tracks:
         for i, off in enumerate(track["offs"]):
@@ -203,7 +230,7 @@ def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
             if not iv:
                 continue
             data[off:off + size] = _decryptSample(
-                key, ivSize, iv, data[off:off + size], subs)
+                key, track["ivSize"], iv, data[off:off + size], subs)
 
     def clone(box):
         return {"typ": box["typ"], "off": box["off"], "size": box["size"],
@@ -267,9 +294,15 @@ def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
         patches[box["off"]] = bytes(fullStsd)
 
     def serialize(box):
+        # 有补丁的 box 必须优先用补丁：stsd 会被解析出子节点（样本条目本身
+        # 就是一个 box），若按「非叶子」分支去拼子节点，就会绕开补丁、
+        # 把 encv/enca + sinf/tenc 原样留下 —— 容器仍声明加密，普通播放器
+        # 直接黑屏（只有容错强的 ffmpeg 系播放器能解）。
+        patched = patches.get(box["off"])
+        if patched is not None:
+            return patched
         if not box["children"]:
-            return (patches.get(box["off"])
-                    or bytes(data[box["off"]:box["off"] + box["size"]]))
+            return bytes(data[box["off"]:box["off"] + box["size"]])
         body = b"".join(serialize(c) for c in box["children"])
         hdr = bytearray(data[box["off"]:box["off"] + box["hdr"]])
         if box["hdr"] == 8:
@@ -281,15 +314,30 @@ def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
 
     first = serialize(tree)
     delta = moov["size"] - len(first)
-    for box in walkChildren(tree):
-        if box["typ"] != "stco":
-            continue
-        nc = struct.unpack_from(">I", data, box["off"] + 12)[0]
-        for i in range(nc):
-            pos = box["off"] + 16 + i * 4
-            value = struct.unpack_from(">I", data, pos)[0]
-            if value >= delta:
-                struct.pack_into(">I", data, pos, value - delta)
+
+    # moov 因为剪掉 senc/saiz/saio 而变短，mdat 会整体前移 delta 字节，
+    # 所以 stco/co64 里的绝对偏移必须同步减去 delta。
+    #
+    # 注意顺序：必须改完再重新 serialize 一次。stco 是叶子 box，serialize
+    # 时直接从 data 里读它的字节 —— 若先 serialize 再改 data，新 moov 里
+    # 仍是旧偏移，播放器就会从错位处读数据（表现为黑屏/花屏）。
+    # 偏移字段定长 4/8 字节，改值不会改变 moov 长度，因此 delta 依然有效。
+    if delta:
+        for box in walkChildren(tree):
+            if box["typ"] == "stco":
+                width = 4
+            elif box["typ"] == "co64":
+                width = 8
+            else:
+                continue
+            nc = struct.unpack_from(">I", data, box["off"] + 12)[0]
+            for i in range(nc):
+                pos = box["off"] + 16 + i * width
+                fmt = ">I" if width == 4 else ">Q"
+                value = struct.unpack_from(fmt, data, pos)[0]
+                if value >= delta:
+                    struct.pack_into(fmt, data, pos, value - delta)
+        first = serialize(tree)
 
     out, off = [], 0
     while off < total:

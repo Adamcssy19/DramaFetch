@@ -2,5 +2,5 @@
 entry = "pack.py"
 class = "DramaPack"
 dependencies = ["http_pack", "m3u8_pack"]
-version = "0.1.6"
+version = "0.1.7"
 gdMinVersion = "0.0.1"
