@@ -195,6 +195,8 @@ class TaskCard(CardWidget):
         contentLayout.setContentsMargins(2, 8, 2, 8)
         contentLayout.addWidget(self.nameLabel)
         contentLayout.addLayout(infoLayout)
+        self.contentLayout = contentLayout
+        self.infoLayout = infoLayout
 
         self.hBoxLayout = QHBoxLayout(self)
         self.hBoxLayout.setContentsMargins(12, 0, 12, 0)

@@ -32,6 +32,17 @@ def _roundedPixmap(src: QPixmap, radius: int) -> QPixmap:
     return result
 
 
+def _makeCopyButton(text: str, ref=None):
+    btn = TransparentToolButton(FluentIcon.COPY)
+    fm = ref.fontMetrics() if ref is not None else btn.fontMetrics()
+    h = max(fm.height() + 2, 14)
+    btn.setFixedSize(h, h)
+    btn.setToolTip("复制")
+    btn.installEventFilter(ToolTipFilter(btn))
+    btn.clicked.connect(lambda: QApplication.clipboard().setText(text))
+    return btn
+
+
 def toDramaIdText(task, speed: int, received: int) -> str | None:
     try:
         seriesId = parseDramaTaskUrl(task.url)[0]
@@ -64,6 +75,24 @@ class DramaTaskCard(TaskCard):
         self.idLabel.installEventFilter(ToolTipFilter(self.idLabel))
         self.episodeLabel.installEventFilter(ToolTipFilter(self.episodeLabel))
 
+        # 剧名右侧复制图标（同字号）
+        self._titleCopy = _makeCopyButton(self._task.name, self.nameLabel)
+        idx = self.contentLayout.indexOf(self.nameLabel)
+        self.contentLayout.removeWidget(self.nameLabel)
+        titleRow = QHBoxLayout()
+        titleRow.setContentsMargins(0, 0, 0, 0)
+        titleRow.setSpacing(4)
+        titleRow.addWidget(self.nameLabel)
+        titleRow.addWidget(self._titleCopy)
+        titleRow.addStretch(1)
+        self.contentLayout.insertLayout(idx, titleRow)
+
+        # ID 右侧复制图标（紧贴 ID 文本）
+        dramaId = self._dramaId()
+        if dramaId:
+            self._idCopy = _makeCopyButton(dramaId, self.idLabel)
+            self.infoLayout.insertWidget(1, self._idCopy)
+
     def _dramaId(self) -> str:
         try:
             return parseDramaTaskUrl(self._task.url)[0]
@@ -85,7 +114,7 @@ class DramaTaskCard(TaskCard):
         return f"已下载 {len(done)} 集：{shown}"
 
     def _refreshIcon(self) -> None:
-        poster = Path(self._task.outputPath) / POSTER_NAME
+        poster = Path(self._task.outputPath) / (self._task.posterFile or POSTER_NAME)
         pixmap = QPixmap()
         if poster.exists() and pixmap.load(str(poster)):
             scaled = pixmap.scaled(

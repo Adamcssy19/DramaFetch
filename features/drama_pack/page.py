@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP as N, Qt, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from qfluentwidgets import (
     BodyLabel,
@@ -55,6 +55,18 @@ def _roundedPixmap(src: QPixmap, radius: int) -> QPixmap:
     painter.drawPixmap(0, 0, src)
     painter.end()
     return result
+
+
+class _CopyButton(TransparentToolButton):
+    def __init__(self, text: str, ref=None, parent=None):
+        super().__init__(FluentIcon.COPY, parent)
+        self._text = text
+        fm = ref.fontMetrics() if ref is not None else self.fontMetrics()
+        h = max(fm.height() + 2, 14)
+        self.setFixedSize(h, h)
+        self.setToolTip("复制")
+        self.installEventFilter(ToolTipFilter(self))
+        self.clicked.connect(lambda: QApplication.clipboard().setText(self._text))
 
 
 class LoadingState(QWidget):
@@ -113,8 +125,26 @@ class DramaCard(CardWidget):
         self._cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._title = StrongBodyLabel(self)
-        self._title.setText(_elide(drama.title, self._title.font(), contentWidth))
+        self._title.setText(_elide(drama.title, self._title.font(), contentWidth - 22))
         self._title.setToolTip(drama.title)
+        self._titleCopy = _CopyButton(drama.title, self._title, self)
+        titleRow = QHBoxLayout()
+        titleRow.setContentsMargins(0, 0, 0, 0)
+        titleRow.setSpacing(4)
+        titleRow.addWidget(self._title)
+        titleRow.addWidget(self._titleCopy)
+        titleRow.addStretch(1)
+
+        self._idLabel = CaptionLabel(self)
+        self._idLabel.setText(f"ID {drama.seriesId}")
+        self._idLabel.setTextColor(QColor(120, 120, 120), QColor(170, 170, 170))
+        self._idCopy = _CopyButton(drama.seriesId, self._idLabel, self)
+        idRow = QHBoxLayout()
+        idRow.setContentsMargins(0, 0, 0, 0)
+        idRow.setSpacing(4)
+        idRow.addWidget(self._idLabel)
+        idRow.addWidget(self._idCopy)
+        idRow.addStretch(1)
 
         self._meta = CaptionLabel(self)
         meta = self._metaText()
@@ -137,14 +167,15 @@ class DramaCard(CardWidget):
         layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(6)
         layout.addWidget(self._cover, 0, Qt.AlignmentFlag.AlignHCenter)
-        layout.addWidget(self._title)
+        layout.addLayout(titleRow)
+        layout.addLayout(idRow)
         layout.addWidget(self._meta)
         layout.addWidget(self._intro)
         layout.addStretch(1)
         layout.addWidget(self._download)
 
     def _metaText(self) -> str:
-        parts = [f"ID {self._drama.seriesId}"]
+        parts = []
         if self._drama.category:
             parts.append(self._drama.category)
         if self._drama.remark:

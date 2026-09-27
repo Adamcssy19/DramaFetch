@@ -33,6 +33,11 @@ DRAMA_SCHEME = "drama"
 POSTER_NAME = "poster.jpg"
 
 
+def posterNameFor(title: str, seriesId: str) -> str:
+    """海报文件名：剧名_频道ID.jpg，便于人工辨认。"""
+    return f"{toSafeFilename(title)}_{seriesId}.jpg"
+
+
 @dataclass(frozen=True)
 class EpisodePick:
     index: int
@@ -59,9 +64,11 @@ class CencTaskStep(HttpTaskStep):
         logger.info("已完成 CENC 解密: {}", path.name)
 
 
+@dataclass(kw_only=True, eq=False)
 class DramaTask(Task):
     packId = "drama"
     canEdit = True
+    posterFile: str = ""
 
     @property
     def outputPath(self) -> str:
@@ -184,7 +191,9 @@ async def buildDramaTask(
     # 保存剧集海报（供任务列表卡片显示），失败不影响任务
     try:
         folder.mkdir(parents=True, exist_ok=True)
-        posterPath = folder / POSTER_NAME
+        posterName = posterNameFor(title, seriesId)
+        task.posterFile = posterName
+        posterPath = folder / posterName
         if drama.cover and not posterPath.exists():
             coverBytes = await api.getBytes(drama.cover)
             if coverBytes:
