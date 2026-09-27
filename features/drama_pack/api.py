@@ -574,8 +574,8 @@ def parsePickSpec(spec: str, total: int) -> list[int]:
     return sorted(picked)
 
 
-def formatEpisodeTitle(index: int, template: str = "第{集数}集", seriesTitle: str = "") -> str:
-    name = (template or "第{集数}集").replace("{集数}", f"{index:03d}")
+def formatEpisodeTitle(index: int, template: str = "{剧名} {集数}", seriesTitle: str = "") -> str:
+    name = (template or "{剧名} {集数}").replace("{集数}", f"{index:03d}")
     if "{剧名}" in name:
         name = name.replace("{剧名}", seriesTitle)
     return name

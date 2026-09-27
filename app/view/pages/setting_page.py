@@ -105,7 +105,7 @@ class SettingPage(ScrollArea):
                                 texts=["DramaFetch", "不使用子文件夹"]),
             ComboBoxSettingCard(cfg.dramaNameFormat, FluentIcon.EDIT, self.tr("短剧文件命名"),
                                 self.tr("文件名模板，剧名与三位集数自动替换"),
-                                texts=["第001集", "剧名 第001集", "剧名-001", "001"]),
+                                texts=["剧名 052", "第052集", "剧名-052", "052"]),
             SwitchSettingCard(FluentIcon.CONNECT, self.tr("使用系统 DNS"),
                               self.tr("使用操作系统的 DNS 解析，兼容 TUN、VPN 和代理等网络环境"),
                               cfg.shouldUseSystemDns),

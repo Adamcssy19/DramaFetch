@@ -248,8 +248,8 @@ class Config(QConfig):
         OptionsValidator(["DramaFetch", ""]),
     )
     dramaNameFormat = OptionsConfigItem(
-        "Drama", "EpisodeNameFormat", "第{集数}集",
-        OptionsValidator(["第{集数}集", "{剧名} 第{集数}集", "{剧名}-{集数}", "{集数}"]),
+        "Drama", "EpisodeNameFormat", "{剧名} {集数}",
+        OptionsValidator(["{剧名} {集数}", "第{集数}集", "{剧名}-{集数}", "{集数}"]),
     )
 
     # 软件
