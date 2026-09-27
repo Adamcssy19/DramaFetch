@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import N, Qt, QUrl
+from PySide6.QtCore import QT_TRANSLATE_NOOP as N, Qt, QUrl
 from PySide6.QtGui import QClipboard, QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QTextEdit, QVBoxLayout, QWidget

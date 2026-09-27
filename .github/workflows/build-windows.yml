@@ -68,6 +68,13 @@ jobs:
           uv python install 3.13
           uv sync --frozen
 
+      - name: Smoke test pack imports
+        shell: pwsh
+        run: |
+          # 特性包页面是延迟导入的，py_compile 与 Nuitka 都不会执行导入。
+          # 必须在这里真实导入一遍，否则「装完打不开」的包会被发出去。
+          uv run python scripts/check_imports.py
+
       - name: Build with Nuitka
         shell: pwsh
         run: |
