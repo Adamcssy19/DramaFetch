@@ -253,10 +253,34 @@ async def rank(route: str, page: int = 1) -> tuple[list[Drama], int]:
     return out, totalPages
 
 
+async def _fetchPlayerPage(seriesId: str) -> dict:
+    """播放页 SSR 数据：剧集元数据 + 当前真实可播的分集列表。"""
+    raw = await _getText(f"/player/{quote(seriesId)}")
+    return loaderPage(parseRouterData(raw), "player_(series_id)/page", "player_")
+
+
 async def detail(seriesId: str) -> Drama:
     seriesId = seriesId.strip()
     if not isNumericId(seriesId):
         raise DramaApiError("剧集编号无效")
+    # 优先走播放页：它 SSR 的 seriesDetail 同时带元数据和当前有效分集；
+    # 详情页内嵌的 vid_list 可能是已下架的旧集（用它们访问播放页只会得到空壳页面）
+    try:
+        page = await _fetchPlayerPage(seriesId)
+    except DramaApiError as e:
+        logger.warning("播放页获取失败，退回详情页: {}", e)
+        page = {}
+    info = page.get("seriesDetail") if isinstance(page.get("seriesDetail"), dict) else None
+    if info:
+        drama = dramaFromAny(info)
+        if drama is not None:
+            vids = tuple(str(v) for v in (info.get("vid_list") or [])
+                         if str(v).strip().isdigit())
+            if vids:
+                drama = replace(drama, vidList=vids)
+            if drama.vidList:
+                return drama
+
     raw = await _getText("/detail?series_id=" + quote(seriesId))
     page = loaderPage(parseRouterData(raw), "detail_page", "detail_")
     info = page.get("seriesDetail")
