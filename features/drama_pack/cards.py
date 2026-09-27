@@ -86,9 +86,10 @@ class DramaTaskCard(TaskCard):
         titleRow = QHBoxLayout()
         titleRow.setContentsMargins(0, 0, 0, 0)
         titleRow.setSpacing(4)
-        titleRow.addWidget(self.nameLabel)
-        titleRow.addWidget(self._titleCopy)
-        titleRow.addStretch(1)
+        # nameLabel 的水平 sizePolicy 是 Ignored（基类设定），不给 stretch
+        # 的话布局会把宽度全让给拉伸项，剧名会被压成 0 宽而看不见。
+        titleRow.addWidget(self.nameLabel, 1)
+        titleRow.addWidget(self._titleCopy, 0)
         self.contentLayout.insertLayout(idx, titleRow)
 
         # ID 右侧复制图标（紧贴 ID 文本）

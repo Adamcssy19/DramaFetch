@@ -109,11 +109,37 @@ def main() -> int:
             if card is None:
                 raise RuntimeError(f"{pack.packId} 未返回任务卡片实例")
             card.refresh(force=True)
+            # 走一次真实布局：名字被布局压成 0 宽是「看得见但没内容」的隐形 bug，
+            # 只看构造成功查不出来，所以这里断言标题确实占到了宽度。
+            card.resize(960, card.height())
+            card.show()
             QApplication.processEvents()
+            if card.nameLabel.width() <= 0:
+                raise RuntimeError(
+                    f"{type(card).__name__} 的标题宽度为 0（布局把名字挤没了）"
+                )
             cards.append(type(card).__name__)
 
+        # 剧卡片：短剧页 / 排行榜页的渲染单元，同样是按需构造的。
+        from drama_pack import api as dramaApi
+        from drama_pack.page import DramaCard
+
+        for rank in (0, 1):
+            drama = dramaApi.Drama(
+                seriesId="7683196130645003288", title="冒烟测试剧", cover="",
+                intro="简介", episodeCount="3", category="榜单",
+                vidList=("a", "b", "c"), rank=rank,
+            )
+            card = DramaCard(drama, None, rank=rank, record=None)
+            card.resize(240, card.height())
+            card.show()
+            QApplication.processEvents()
+            if card._title.width() <= 0:
+                raise RuntimeError(f"DramaCard(rank={rank}) 的标题宽度为 0")
+            cards.append(f"DramaCard(rank={rank})")
+
         print(f"OK  主窗口创建并显示成功，已实例化页面: {created}")
-        print(f"OK  任务卡片构造成功: {cards}")
+        print(f"OK  卡片构造成功: {cards}")
         print("✓ 启动冒烟检查通过")
         return 0
     except Exception as err:

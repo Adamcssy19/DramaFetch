@@ -78,16 +78,23 @@ def _roundedPixmap(src: QPixmap, radius: int) -> QPixmap:
     return result
 
 
-class _CopyButton(TransparentToolButton):
-    def __init__(self, text: str, ref=None, parent=None):
-        super().__init__(FluentIcon.COPY, parent)
-        self._text = text
-        fm = ref.fontMetrics() if ref is not None else self.fontMetrics()
-        h = max(fm.height() + 2, 14)
-        self.setFixedSize(h, h)
-        self.setToolTip("复制")
-        self.installEventFilter(ToolTipFilter(self))
-        self.clicked.connect(lambda: QApplication.clipboard().setText(self._text))
+def _copyButton(text: str, ref=None, parent=None) -> TransparentToolButton:
+    """同字号的小复制按钮。
+
+    注意：**不要用子类 override `__init__`**。qfluentwidgets 的
+    `TransparentToolButton.__init__` 是 `singledispatchmethod`，`(icon, parent)`
+    分支内部走 `self.__init__(parent)` 回派；子类一旦 override `__init__`
+    就会无限递归 RecursionError（同 app/view/components/track_bar.py 里
+    「不能安全 override」的注释）。需要额外参数就用工厂函数。
+    """
+    button = TransparentToolButton(FluentIcon.COPY, parent)
+    fm = ref.fontMetrics() if ref is not None else button.fontMetrics()
+    h = max(fm.height() + 2, 14)
+    button.setFixedSize(h, h)
+    button.setToolTip("复制")
+    button.installEventFilter(ToolTipFilter(button))
+    button.clicked.connect(lambda: QApplication.clipboard().setText(text))
+    return button
 
 
 class LoadingState(QWidget):
@@ -148,7 +155,7 @@ class DramaCard(CardWidget):
         self._title = StrongBodyLabel(self)
         self._title.setText(_elide(drama.title, self._title.font(), contentWidth - 22))
         self._title.setToolTip(drama.title)
-        self._titleCopy = _CopyButton(drama.title, self._title, self)
+        self._titleCopy = _copyButton(drama.title, self._title, self)
         titleRow = QHBoxLayout()
         titleRow.setContentsMargins(0, 0, 0, 0)
         titleRow.setSpacing(4)
@@ -159,7 +166,7 @@ class DramaCard(CardWidget):
         self._idLabel = CaptionLabel(self)
         self._idLabel.setText(f"ID {drama.seriesId}")
         self._idLabel.setTextColor(QColor(120, 120, 120), QColor(170, 170, 170))
-        self._idCopy = _CopyButton(drama.seriesId, self._idLabel, self)
+        self._idCopy = _copyButton(drama.seriesId, self._idLabel, self)
         idRow = QHBoxLayout()
         idRow.setContentsMargins(0, 0, 0, 0)
         idRow.setSpacing(4)
