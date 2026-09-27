@@ -146,42 +146,6 @@ class ThemeCard(CardWidget):
         painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), radius, radius)
 
 
-class OptionCard(CardWidget):
-
-    def __init__(self, icon: FluentIcon, title: str, desc: str,
-                 isChecked: bool = False, parent=None):
-        super().__init__(parent)
-        self._initWidget(icon, title, desc, isChecked)
-        self._initLayout()
-
-    def _initWidget(self, icon: FluentIcon, title: str, desc: str, isChecked: bool) -> None:
-        self.setFixedHeight(64)
-        self.iconChip = IconChip(icon, NEUTRAL_CHIP_COLORS, size=34, parent=self)
-        self.titleLabel = BodyLabel(title, self)
-        self.descLabel = CaptionLabel(desc, self)
-        self.descLabel.setTextColor(Qt.GlobalColor.gray, Qt.GlobalColor.gray)
-        self.switch = SwitchButton(self)
-        self.switch.setOnText("")
-        self.switch.setOffText("")
-        self.switch.setChecked(isChecked)
-
-    def _initLayout(self) -> None:
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(18, 8, 18, 8)
-        layout.setSpacing(14)
-        layout.addWidget(self.iconChip)
-
-        textCol = QVBoxLayout()
-        textCol.setSpacing(0)
-        textCol.addWidget(self.titleLabel)
-        textCol.addWidget(self.descLabel)
-        layout.addLayout(textCol, 1)
-        layout.addWidget(self.switch)
-
-    def isChecked(self) -> bool:
-        return self.switch.isChecked()
-
-
 class PageHeader(QWidget):
 
     def __init__(self, title: str, desc: str, parent=None):
@@ -387,93 +351,6 @@ class RuntimeInstallPage(QWidget):
         return [rt for cb, rt in self._checkBoxes if cb.isChecked()]
 
 
-class AdvancedOptionsPage(QWidget):
-
-    def __init__(self, featureService, parent=None):
-        super().__init__(parent)
-        self._featureService = featureService
-        self._initWidget()
-        self._initLayout()
-
-    def _initWidget(self) -> None:
-        self.header = PageHeader(
-            self.tr("更多选项"),
-            self.tr("按需开启以下功能，也可以稍后在设置中修改"), self,
-        )
-        self.runAtLoginCard = OptionCard(
-            FluentIcon.POWER_BUTTON, self.tr("开机自启"),
-            self.tr("登录系统时自动在后台启动，随时接管下载"),
-            isChecked=cfg.shouldRunAtLogin.value, parent=self,
-        )
-        self.clipboardCard = OptionCard(
-            FluentIcon.PASTE, self.tr("剪贴板监听"),
-            self.tr("复制下载链接时自动弹出新任务提示"),
-            isChecked=cfg.isClipboardListenerEnabled.value, parent=self,
-        )
-        self.categoryCard = OptionCard(
-            FluentIcon.TAG, self.tr("自动分类保存"),
-            self.tr("按文件类型自动保存到 视频、音频、文档 等子文件夹"),
-            isChecked=cfg.isCategoryEnabled.value, parent=self,
-        )
-        if sys.platform != "darwin":
-            self.fileAssocCard = OptionCard(
-                FluentIcon.DOCUMENT, self.tr("关联文件类型"),
-                self.tr("双击 .torrent 等文件时用 DramaFetch 打开"),
-                isChecked=self._featureService.isFileAssociationEnabled(), parent=self,
-            )
-            self.uriSchemeCard = OptionCard(
-                FluentIcon.LINK, self.tr("处理协议链接"),
-                self.tr("点击 drama:// 链接时唤起 DramaFetch"),
-                isChecked=self._featureService.isUriSchemeAssociationEnabled(), parent=self,
-            )
-            self.urlSchemeCard = OptionCard(
-                FluentIcon.GLOBE, self.tr("允许链接唤起"),
-                self.tr("允许通过 dramafetch:// 协议启动桌面端"),
-                isChecked=cfg.isUrlSchemeRegistered.value, parent=self,
-            )
-        else:
-            self.fileAssocCard = None
-            self.uriSchemeCard = None
-            self.urlSchemeCard = None
-
-    def _initLayout(self) -> None:
-        contentLayout = _pageContent(self, self.header)
-
-        listLayout = QVBoxLayout()
-        listLayout.setSpacing(8)
-        for card in [self.runAtLoginCard, self.clipboardCard, self.categoryCard,
-                     self.fileAssocCard, self.uriSchemeCard, self.urlSchemeCard]:
-            if card is not None:
-                listLayout.addWidget(card)
-        contentLayout.addLayout(listLayout)
-
-    def save(self) -> None:
-        if self.runAtLoginCard.isChecked() != cfg.shouldRunAtLogin.value:
-            from app.platform.run_at_login import setRunAtLogin
-            setRunAtLogin(self.runAtLoginCard.isChecked())
-            cfg.set(cfg.shouldRunAtLogin, self.runAtLoginCard.isChecked())
-
-        cfg.set(cfg.isClipboardListenerEnabled, self.clipboardCard.isChecked())
-
-        cfg.set(cfg.isCategoryEnabled, self.categoryCard.isChecked())
-
-        if self.fileAssocCard is not None:
-            for pack in self._featureService.packs:
-                config = pack.config
-                if config is not None and config.associateFileTypes is not None:
-                    cfg.set(config.associateFileTypes, self.fileAssocCard.isChecked())
-                if config is not None and config.associateUriSchemes is not None:
-                    cfg.set(config.associateUriSchemes, self.uriSchemeCard.isChecked())
-
-        if self.urlSchemeCard is not None:
-            from app.platform.url_scheme import registerUrlScheme, unregisterUrlScheme
-            if self.urlSchemeCard.isChecked():
-                registerUrlScheme()
-            else:
-                unregisterUrlScheme()
-            cfg.set(cfg.isUrlSchemeRegistered, self.urlSchemeCard.isChecked())
-
-
 class CompletePage(QWidget):
 
     finishClicked = Signal()
@@ -520,7 +397,7 @@ class OobeWindow(FluentWidget):
 
     finished = Signal()
 
-    PAGE_COUNT = 5
+    PAGE_COUNT = 4
 
     def __init__(self, coroutineRunner, featureService,
                  runtimeStatusService, parent=None):
@@ -557,14 +434,12 @@ class OobeWindow(FluentWidget):
         self.welcomePage = WelcomePage(self)
         self.basicSettingsPage = BasicSettingsPage(self)
         self.runtimeInstallPage = RuntimeInstallPage(self._featureService, self)
-        self.advancedOptionsPage = AdvancedOptionsPage(self._featureService, self)
         self.completePage = CompletePage(self)
 
         self.stackedWidget = DrillInTransitionStackedWidget(self)
         self.stackedWidget.addWidget(self.welcomePage)
         self.stackedWidget.addWidget(self.basicSettingsPage)
         self.stackedWidget.addWidget(self.runtimeInstallPage)
-        self.stackedWidget.addWidget(self.advancedOptionsPage)
         self.stackedWidget.addWidget(self.completePage)
 
         self.backButton = PushButton(self.tr("上一步"), self)
@@ -651,7 +526,6 @@ class OobeWindow(FluentWidget):
         if self._isFinished:
             return
         self._isFinished = True
-        self.advancedOptionsPage.save()
         cfg.set(cfg.hasCompletedOobe, True)
         self.finished.emit()
         self.close()
