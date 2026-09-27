@@ -60,7 +60,7 @@ class DramaParser(TaskParser):
             )
             stream = await api.resolveStream(seriesId, vid)
             return buildSingleEpisodeTask(
-                drama, pick, stream.url,
+                drama, pick, stream,
                 outputFolder=options.outputFolder,
                 subworkerCount=options.subworkerCount,
             )

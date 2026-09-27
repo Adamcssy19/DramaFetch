@@ -19,6 +19,7 @@ from app.platform.filesystem import toSafeFilename
 from .api import (
     BASE,
     Drama,
+    StreamInfo,
     formatEpisodeTitle,
     detail,
     resolveStream,
@@ -32,6 +33,25 @@ class EpisodePick:
     index: int
     vid: str
     title: str
+
+
+@dataclass(kw_only=True)
+class CencTaskStep(HttpTaskStep):
+    """CENC 加密源的下载步骤：下载完成后自动解密为可播放 MP4。"""
+
+    cencKey: str = ""
+
+    async def run(self, reportSpeed, waitForSpeedLimit) -> None:
+        await super().run(reportSpeed, waitForSpeedLimit)
+        from .cenc import decryptCencMp4
+
+        path = Path(self.outputPath)
+        data = bytearray(path.read_bytes())
+        plain = decryptCencMp4(data, bytes.fromhex(self.cencKey))
+        temp = path.with_suffix(path.suffix + ".dec")
+        temp.write_bytes(plain)
+        temp.replace(path)
+        logger.info("已完成 CENC 解密: {}", path.name)
 
 
 class DramaTask(Task):
@@ -86,21 +106,21 @@ async def buildDramaTask(
     if not wanted:
         raise ValueError("没有可下载的剧集")
 
-    # 并发解析每集直链（网页一次一个请求，5 路并发已足够快且不刺激风控）
+    # 并发解析每集直链（App 接口原画优先，失败退官网网页直链）
     semaphore = asyncio.Semaphore(5)
     failures: list[str] = []
 
-    async def resolveOne(pick: int) -> tuple[int, str] | None:
+    async def resolveOne(pick: int) -> tuple[int, StreamInfo] | None:
         async with semaphore:
             try:
                 info = await resolveStream(seriesId, drama.vidList[pick - 1])
-                return pick, info.url
+                return pick, info
             except Exception as e:
                 failures.append(f"第{pick}集：{e}")
                 return None
 
     results = await asyncio.gather(*(resolveOne(p) for p in wanted))
-    resolved = {pick: url for item in results if item for pick, url in [item]}
+    resolved = {pick: info for item in results if item for pick, info in [item]}
     if not resolved:
         raise ValueError("所有选中剧集都取流失败：\n" + "\n".join(failures[:3]))
 
@@ -120,15 +140,21 @@ async def buildDramaTask(
     for order, pick in enumerate(sorted(resolved)):
         relative = f"{safeName}/{formatEpisodeTitle(pick)}.mp4"
         files.append(TaskFile(index=order, relativePath=relative))
-        steps.append(HttpTaskStep(
+        info = resolved[pick]
+        referer = "https://novel.snssdk.com/" if info.cencKey else BASE + "/"
+        common = dict(
             stepIndex=order,
             fileIndex=order,
-            url=resolved[pick],
-            headers={"referer": BASE + "/"},
+            url=info.url,
+            headers={"referer": referer},
             subworkerCount=subworkerCount,
             canUseRangeRequests=True,
             outputFile=str(folder / f"{formatEpisodeTitle(pick)}.mp4"),
-        ))
+        )
+        if info.cencKey:
+            steps.append(CencTaskStep(cencKey=info.cencKey, **common))
+        else:
+            steps.append(HttpTaskStep(**common))
     task.steps = steps
     task.files = files
     task.fileSize = 0
@@ -142,27 +168,31 @@ async def buildDramaTask(
 def buildSingleEpisodeTask(
     drama: Drama,
     pick: int,
-    streamUrl: str,
+    stream: StreamInfo,
     outputFolder: Path,
     subworkerCount: int = 8,
 ):
     """单集任务（粘贴播放页链接时用），复用 http_pack 的标准任务。"""
-    from http_pack.task import HttpTask, HttpTaskStep
+    from http_pack.task import HttpTask
 
     safeName = toSafeFilename(drama.title or "红果短剧", fallback="红果短剧")
     fileName = f"{formatEpisodeTitle(pick)}.mp4"
     task = HttpTask(
         name=f"{safeName}_{formatEpisodeTitle(pick)}",
-        url=streamUrl,
+        url=stream.url,
         packId="http",
         outputFolder=Path(outputFolder),
     )
-    task.addStep(HttpTaskStep(
+    common = dict(
         stepIndex=1,
-        url=streamUrl,
-        headers={"referer": BASE + "/"},
+        url=stream.url,
+        headers={"referer": "https://novel.snssdk.com/" if stream.cencKey else BASE + "/"},
         subworkerCount=subworkerCount,
         canUseRangeRequests=True,
         outputFile=str(Path(outputFolder) / safeName / fileName),
-    ))
+    )
+    if stream.cencKey:
+        task.addStep(CencTaskStep(cencKey=stream.cencKey, **common))
+    else:
+        task.addStep(HttpTaskStep(**common))
     return task

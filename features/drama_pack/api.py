@@ -67,6 +67,8 @@ class StreamInfo:
     width: str = ""
     height: str = ""
     duration: str = ""
+    cencKey: str = ""  # hex；非空表示 CENC 加密流，下载完成后需要解密
+    quality: int = 0   # 分辨率高度（App 源为精确值，网页源取自视频信息）
 
 
 def isNumericId(text: str) -> bool:
@@ -298,6 +300,16 @@ async def detail(seriesId: str) -> Drama:
 
 
 async def resolveStream(seriesId: str, vid: str) -> StreamInfo:
+    """解析单集播放地址：优先 App 接口原画（CENC 加密），失败退官网网页直链。"""
+    from .appapi import AppApiError, appVideoModel
+
+    try:
+        streams = await appVideoModel(vid)
+        best = max(streams, key=lambda s: s.quality)
+        return StreamInfo(url=best.url, cencKey=best.cencKey, quality=best.quality)
+    except Exception as e:
+        logger.info("App 接口取流失败，退回官网网页源: {}", e)
+
     path = f"/player/{quote(seriesId)}/{quote(vid)}"
     raw = await _getText(path)
     page = loaderPage(parseRouterData(raw), "player_(series_id)/(vid)/page", "player_")
