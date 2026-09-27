@@ -58,7 +58,8 @@ class DramaParser(TaskParser):
             pick = next(
                 (i + 1 for i, v in enumerate(drama.vidList) if v == vid), 1
             )
-            stream = await api.resolveStream(seriesId, vid)
+            stream = await api.resolveStream(seriesId, vid,
+                                             title=drama.title, pick=pick)
             return buildSingleEpisodeTask(
                 drama, pick, stream,
                 outputFolder=options.outputFolder,

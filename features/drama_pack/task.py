@@ -14,6 +14,7 @@ from urllib.parse import quote, unquote, urlparse, parse_qs
 from loguru import logger
 
 from app.models.task import Task, TaskFile
+from app.config.cfg import cfg
 from app.platform.filesystem import toSafeFilename
 
 from .api import (
@@ -96,6 +97,7 @@ async def buildDramaTask(
 ) -> DramaTask:
     """解析任务链接：取详情 → 解析每集直链 → 组装多集任务。"""
     from http_pack.task import HttpTaskStep
+    from m3u8_pack.task import M3U8TaskStep
 
     seriesId, title, picks, category = parseDramaTaskUrl(options_url)
     drama = await detail(seriesId)
@@ -113,7 +115,8 @@ async def buildDramaTask(
     async def resolveOne(pick: int) -> tuple[int, StreamInfo] | None:
         async with semaphore:
             try:
-                info = await resolveStream(seriesId, drama.vidList[pick - 1])
+                info = await resolveStream(seriesId, drama.vidList[pick - 1],
+                                           title=title, pick=pick)
                 return pick, info
             except Exception as e:
                 failures.append(f"第{pick}集：{e}")
@@ -125,7 +128,12 @@ async def buildDramaTask(
         raise ValueError("所有选中剧集都取流失败：\n" + "\n".join(failures[:3]))
 
     safeName = toSafeFilename(title, fallback=f"短剧_{seriesId}")
-    folder = Path(outputFolder) / safeName
+    baseFolder = Path(outputFolder)
+    subfolder = str(cfg.dramaSubfolder.value or "").strip()
+    if subfolder:
+        baseFolder = baseFolder / toSafeFilename(subfolder)
+    folder = baseFolder / safeName
+    template = cfg.dramaNameFormat.value
 
     task = DramaTask(
         name=safeName,
@@ -138,7 +146,9 @@ async def buildDramaTask(
     steps = []
     files: list[TaskFile] = []
     for order, pick in enumerate(sorted(resolved)):
-        relative = f"{safeName}/{formatEpisodeTitle(pick)}.mp4"
+        epName = toSafeFilename(formatEpisodeTitle(pick, template, safeName),
+                                fallback=f"第{pick:03d}集")
+        relative = "/".join(part for part in (subfolder, safeName, f"{epName}.mp4") if part)
         files.append(TaskFile(index=order, relativePath=relative))
         info = resolved[pick]
         referer = "https://novel.snssdk.com/" if info.cencKey else BASE + "/"
@@ -146,15 +156,16 @@ async def buildDramaTask(
             stepIndex=order,
             fileIndex=order,
             url=info.url,
-            headers={"referer": referer},
             subworkerCount=subworkerCount,
-            canUseRangeRequests=True,
-            outputFile=str(folder / f"{formatEpisodeTitle(pick)}.mp4"),
+            outputFile=str(folder / f"{epName}.mp4"),
         )
-        if info.cencKey:
-            steps.append(CencTaskStep(cencKey=info.cencKey, **common))
+        if info.kind == "hls":
+            steps.append(M3U8TaskStep(headers={}, threadCount=subworkerCount, **common))
+        elif info.cencKey:
+            steps.append(CencTaskStep(cencKey=info.cencKey,
+                                      headers={"referer": referer}, **common))
         else:
-            steps.append(HttpTaskStep(**common))
+            steps.append(HttpTaskStep(headers={"referer": referer}, **common))
     task.steps = steps
     task.files = files
     task.fileSize = 0
@@ -174,11 +185,19 @@ def buildSingleEpisodeTask(
 ):
     """单集任务（粘贴播放页链接时用），复用 http_pack 的标准任务。"""
     from http_pack.task import HttpTask
+    from m3u8_pack.task import M3U8TaskStep
 
     safeName = toSafeFilename(drama.title or "红果短剧", fallback="红果短剧")
-    fileName = f"{formatEpisodeTitle(pick)}.mp4"
+    epName = toSafeFilename(
+        formatEpisodeTitle(pick, cfg.dramaNameFormat.value, safeName),
+        fallback=f"第{pick:03d}集")
+    fileName = f"{epName}.mp4"
+    baseFolder = Path(outputFolder)
+    subfolder = str(cfg.dramaSubfolder.value or "").strip()
+    if subfolder:
+        baseFolder = baseFolder / toSafeFilename(subfolder)
     task = HttpTask(
-        name=f"{safeName}_{formatEpisodeTitle(pick)}",
+        name=f"{safeName}_{epName}",
         url=stream.url,
         packId="http",
         outputFolder=Path(outputFolder),
@@ -186,13 +205,14 @@ def buildSingleEpisodeTask(
     common = dict(
         stepIndex=1,
         url=stream.url,
-        headers={"referer": "https://novel.snssdk.com/" if stream.cencKey else BASE + "/"},
         subworkerCount=subworkerCount,
-        canUseRangeRequests=True,
-        outputFile=str(Path(outputFolder) / safeName / fileName),
+        outputFile=str(baseFolder / safeName / fileName),
     )
-    if stream.cencKey:
-        task.addStep(CencTaskStep(cencKey=stream.cencKey, **common))
+    if stream.kind == "hls":
+        task.addStep(M3U8TaskStep(headers={}, threadCount=subworkerCount, **common))
+    elif stream.cencKey:
+        task.addStep(CencTaskStep(cencKey=stream.cencKey,
+                                  headers={"referer": "https://novel.snssdk.com/"}, **common))
     else:
-        task.addStep(HttpTaskStep(**common))
+        task.addStep(HttpTaskStep(headers={"referer": BASE + "/"}, **common))
     return task

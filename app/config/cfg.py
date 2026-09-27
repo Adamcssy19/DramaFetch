@@ -242,6 +242,16 @@ class Config(QConfig):
         shouldShowDockSpeed = ConfigItem("Personalization", "ShowDockSpeed", True, BoolValidator())
         shouldShowMenuBarSpeed = ConfigItem("Personalization", "ShowMenuBarSpeed", True, BoolValidator())
 
+    # 短剧
+    dramaSubfolder = OptionsConfigItem(
+        "Drama", "Subfolder", "DramaFetch",
+        OptionsValidator(["DramaFetch", ""]),
+    )
+    dramaNameFormat = OptionsConfigItem(
+        "Drama", "EpisodeNameFormat", "第{集数}集",
+        OptionsValidator(["第{集数}集", "{剧名} 第{集数}集", "{剧名}-{集数}", "{集数}"]),
+    )
+
     # 软件
     shouldCheckUpdateAtStartup = ConfigItem("Software", "CheckUpdateAtStartUp", True, BoolValidator())
     shouldRunAtLogin = ConfigItem("Software", "AutoRun", False, BoolValidator())

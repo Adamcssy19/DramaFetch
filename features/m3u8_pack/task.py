@@ -127,6 +127,9 @@ class M3U8Task(Task):
 
 @dataclass(kw_only=True)
 class M3U8TaskStep(TaskStep):
+    url: str = ""
+    saveName: str = ""
+    outputFile: str = ""
     headers: dict[str, str] = field(default_factory=dict)
     threadCount: int = 8
     retryCount: int = 3
@@ -171,6 +174,8 @@ class M3U8TaskStep(TaskStep):
 
     @property
     def outputPath(self) -> str:
+        if self.outputFile:
+            return toPosixPath(self.outputFile)
         return toPosixPath(self.task.outputFolder / self.task.name)
 
     @property
@@ -179,7 +184,7 @@ class M3U8TaskStep(TaskStep):
 
     @property
     def _saveName(self) -> str:
-        return Path(self.task.name).stem
+        return Path(self.saveName or self.task.name).stem
 
     def setOptions(self, options: dict) -> None:
         if "headers" in options:
@@ -244,8 +249,8 @@ class M3U8TaskStep(TaskStep):
             return "true" if v else "false"
 
         args = [
-            self.task.url,
-            f"--save-dir={toPosixPath(self.task.outputFolder)}",
+            self.url or self.task.url,
+            f"--save-dir={toPosixPath(Path(self.outputFile).parent if self.outputFile else self.task.outputFolder)}",
             f"--save-name={self._saveName}",
             f"--tmp-dir={self._tempFolder}",
             f"--thread-count={self.threadCount}",
@@ -452,6 +457,8 @@ class M3U8TaskStep(TaskStep):
 
         self.task.outputFolder.mkdir(parents=True, exist_ok=True)
         Path(self._tempFolder).mkdir(parents=True, exist_ok=True)
+        if self.outputFile:
+            Path(self.outputFile).parent.mkdir(parents=True, exist_ok=True)
         Path(f"{self.outputPath}.ghd").touch(exist_ok=True)
 
         env = None

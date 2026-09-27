@@ -69,6 +69,7 @@ class StreamInfo:
     duration: str = ""
     cencKey: str = ""  # hex；非空表示 CENC 加密流，下载完成后需要解密
     quality: int = 0   # 分辨率高度（App 源为精确值，网页源取自视频信息）
+    kind: str = ""     # ""=单文件直链 / "hls"=m3u8 分片流
 
 
 def isNumericId(text: str) -> bool:
@@ -299,32 +300,217 @@ async def detail(seriesId: str) -> Drama:
     return drama
 
 
-async def resolveStream(seriesId: str, vid: str) -> StreamInfo:
-    """解析单集播放地址：优先 App 接口原画（CENC 加密），失败退官网网页直链。"""
-    from .appapi import AppApiError, appVideoModel
+_PLAYBACK_PROXY_API = "https://djapi.999888456.xyz/api/hongguo/play"
+_MIRROR_BASE = "https://www.hongguoapp.cn"
+_MIRROR_PLAYER_RE = re.compile(r"player_[a-z0-9]+=(\{.*?\})\s*</script>", re.S)
+_MIRROR_SEARCH_CACHE: dict[str, str | None] = {}
 
+
+def _rol8(value: int, n: int) -> int:
+    value &= 0xFF
+    return ((value << n) | (value >> (8 - n))) & 0xFF if n else value
+
+
+def _decodeBackupResponse(text: str) -> bytes:
+    """备用解析接口的 v2. 加密响应：掩码派生 AES-CBC 密钥后解密（红果鉴算法）。"""
+    text = text.strip()
+    if not text.startswith("v2."):
+        return text.encode()
+    parts = text.split(".", 3)
+    if len(parts) != 3 or len(parts[1]) <= 4 or len(parts[1]) > 1028:
+        raise DramaApiError("备用接口响应密钥无效")
+    from base64 import b64decode
+
+    from Crypto.Cipher import AES
+
+    encoded = bytes.fromhex(parts[1][4:])
+    if len(encoded) < 32:
+        raise DramaApiError("备用接口响应密钥无效")
+    mask = bytes([104, 64, 70, 166, 190, 168, 143, 130, 225, 254,
+                  251, 217, 196, 34, 45, 60, 29, 20, 103, 105])
+    material = bytearray(len(encoded))
+    for i, cur in enumerate(encoded):
+        previous = 109 if i == 0 else encoded[i - 1]
+        slot = i % len(mask)
+        salt = mask[slot] ^ ((90 + 13 * slot) & 0xFF) ^ 85
+        shifted = (cur + 215 - 11 * i) & 0xFF
+        material[i] = previous ^ salt ^ _rol8(shifted, 3)
+    try:
+        ciphertext = b64decode(parts[2], validate=True)
+    except Exception:
+        ciphertext = b64decode(parts[2] + "=" * (-len(parts[2]) % 4))
+    if not ciphertext or len(ciphertext) % 16:
+        raise DramaApiError("备用接口加密响应无效")
+    plain = AES.new(bytes(material[:16]), AES.MODE_CBC,
+                    bytes(material[16:32])).decrypt(bytes(ciphertext))
+    pad = plain[-1]
+    if 1 <= pad <= 16:
+        plain = plain[:-pad]
+    return plain
+
+
+async def _backupPlayback(seriesId: str, vid: str) -> StreamInfo:
+    """备用解析接口：第三方代理，返回 CENC 加密流与密钥（红果鉴渠道）。"""
+    from base64 import b64encode
+
+    from .cenc import hongguoContentKey
+
+    reference = json.dumps({
+        "content_type": 1004, "from_video_id": "",
+        "series_id": str(seriesId), "vid": str(vid), "video_platform": 3,
+    }, separators=(",", ":")).encode()
+    url = f"{_PLAYBACK_PROXY_API}?id={b64encode(reference).decode()}"
+    client = buildClient(userAgent=BROWSER_UA, timeout=20)
+    try:
+        response = await client.get(url, headers={"accept": "text/plain", "referer": BASE + "/"})
+        try:
+            status = response.status.as_int()
+            if status != 200:
+                raise DramaApiError(f"备用接口 HTTP {status}")
+            text = await response.text()
+        finally:
+            response.close()
+    except DramaApiError:
+        raise
+    except Exception as e:
+        raise DramaApiError("备用接口无法访问") from e
+    finally:
+        client.close()
+
+    payload = json.loads(_decodeBackupResponse(text))
+    for flag in (payload.get("parse"), payload.get("jx")):
+        if str(flag or "") not in ("", "null", "false", "0", '"0"', '""'):
+            raise DramaApiError("备用接口未返回直接媒体地址")
+
+    best: tuple[str, int, str] | None = None
+    for option in payload.get("key_urls") or []:
+        src = str(option.get("src") or "").strip()
+        if not src.startswith("http") or len(src) > 8192:
+            continue
+        spade = str(option.get("spade_a") or "")
+        try:
+            cencKey = hongguoContentKey(spade).hex()
+        except Exception:
+            continue
+        digits = "".join(ch for ch in str(option.get("name") or "") if ch.isdigit())
+        quality = int(digits) if digits else 0
+        if best is None or quality > best[1]:
+            best = (src, quality, cencKey)
+    if best is None:
+        raise DramaApiError("备用接口未返回可用的媒体和密钥")
+    return StreamInfo(url=best[0], cencKey=best[2], quality=best[1])
+
+
+async def _mirrorFetch(path: str) -> str:
+    client = buildClient(userAgent=BROWSER_UA, timeout=20)
+    try:
+        response = await client.get(
+            _MIRROR_BASE + path,
+            headers={"accept": "text/html", "accept-language": "zh-CN,zh;q=0.9"})
+        try:
+            status = response.status.as_int()
+            if status != 200:
+                raise DramaApiError(f"镜像站 HTTP {status}")
+            return await response.text()
+        finally:
+            response.close()
+    except DramaApiError:
+        raise
+    except Exception as e:
+        raise DramaApiError("镜像站无法访问") from e
+    finally:
+        client.close()
+
+
+async def _mirrorFindVod(title: str) -> str | None:
+    title = (title or "").strip()
+    if not title:
+        return None
+    if title in _MIRROR_SEARCH_CACHE:
+        return _MIRROR_SEARCH_CACHE[title]
+    vodId: str | None = None
+    try:
+        raw = await _mirrorFetch(f"/vodsearch/-------------.html?wd={quote(title)}")
+        items = re.findall(r'href="/voddetail/(\d+)\.html"[^>]*title="([^"]*)"', raw)
+        if not items:
+            items = [(m, re.sub(r"<[^>]+>", "", t)) for m, t in
+                     re.findall(r'href="/voddetail/(\d+)\.html"[^>]*>([^<]+)</a>', raw)]
+        for candidate, name in items:
+            if name.strip() == title:
+                vodId = candidate
+                break
+        if vodId is None and items:
+            vodId = items[0][0]
+    except Exception as e:
+        logger.debug("镜像站搜索失败: {}", e)
+    _MIRROR_SEARCH_CACHE[title] = vodId
+    return vodId
+
+
+async def _mirrorResolve(title: str, pick: int) -> StreamInfo:
+    """镜像站渠道：按剧名匹配后取明文 m3u8 分片流。"""
+    vodId = await _mirrorFindVod(title)
+    if not vodId:
+        raise DramaApiError("镜像站未收录该剧")
+    raw = await _mirrorFetch(f"/vodplay/{vodId}-1-{max(1, pick)}.html")
+    for m in _MIRROR_PLAYER_RE.finditer(raw):
+        try:
+            obj = json.loads(m.group(1))
+        except Exception:
+            continue
+        url = str(obj.get("url") or "")
+        if ";" in url:
+            url = url.split(";", 1)[0]
+        if re.search(r"https?://\S+\.m3u8", url):
+            return StreamInfo(url=url, kind="hls")
+    raise DramaApiError("镜像站该集没有 m3u8 地址")
+
+
+async def resolveStream(seriesId: str, vid: str, title: str = "", pick: int = 0) -> StreamInfo:
+    """解析单集播放地址，按可用性依次尝试四条渠道。"""
+    from .appapi import appVideoModel
+
+    errors: list[str] = []
     try:
         streams = await appVideoModel(vid)
         best = max(streams, key=lambda s: s.quality)
         return StreamInfo(url=best.url, cencKey=best.cencKey, quality=best.quality)
     except Exception as e:
-        logger.info("App 接口取流失败，退回官网网页源: {}", e)
+        errors.append(f"App源：{e}")
+        logger.info("App 接口取流失败，尝试官网网页源: {}", e)
 
-    path = f"/player/{quote(seriesId)}/{quote(vid)}"
-    raw = await _getText(path)
-    page = loaderPage(parseRouterData(raw), "player_(series_id)/(vid)/page", "player_")
-    info = page.get("video_player_info")
-    if not isinstance(info, dict):
-        raise DramaApiError("红果未返回播放数据，该集可能仅允许网页试看")
-    url = str(info.get("main_url") or "")
-    if not url.startswith("http"):
-        raise DramaApiError("该集没有公开的播放地址，可能需要登录或仅限试看")
-    return StreamInfo(
-        url=url,
-        width=str(info.get("width") or ""),
-        height=str(info.get("height") or ""),
-        duration=str(info.get("duration") or ""),
-    )
+    try:
+        path = f"/player/{quote(seriesId)}/{quote(vid)}"
+        raw = await _getText(path)
+        page = loaderPage(parseRouterData(raw), "player_(series_id)/(vid)/page", "player_")
+        info = page.get("video_player_info")
+        if not isinstance(info, dict):
+            raise DramaApiError("红果未返回播放数据，该集可能仅允许网页试看")
+        url = str(info.get("main_url") or "")
+        if not url.startswith("http"):
+            raise DramaApiError("该集没有公开的播放地址")
+        return StreamInfo(
+            url=url,
+            width=str(info.get("width") or ""),
+            height=str(info.get("height") or ""),
+            duration=str(info.get("duration") or ""),
+        )
+    except Exception as e:
+        errors.append(f"官网源：{e}")
+        logger.info("官网取流失败，尝试备用解析接口: {}", e)
+
+    try:
+        return await _backupPlayback(seriesId, vid)
+    except Exception as e:
+        errors.append(f"备用源：{e}")
+        logger.info("备用接口取流失败，尝试镜像站: {}", e)
+
+    try:
+        return await _mirrorResolve(title, pick)
+    except Exception as e:
+        errors.append(f"镜像站：{e}")
+
+    raise DramaApiError("全部渠道取流失败（" + "；".join(errors) + "）")
 
 
 async def resolveSeriesId(text: str) -> str:
@@ -388,5 +574,8 @@ def parsePickSpec(spec: str, total: int) -> list[int]:
     return sorted(picked)
 
 
-def formatEpisodeTitle(index: int) -> str:
-    return f"第{index:03d}集"
+def formatEpisodeTitle(index: int, template: str = "第{集数}集", seriesTitle: str = "") -> str:
+    name = (template or "第{集数}集").replace("{集数}", f"{index:03d}")
+    if "{剧名}" in name:
+        name = name.replace("{剧名}", seriesTitle)
+    return name
