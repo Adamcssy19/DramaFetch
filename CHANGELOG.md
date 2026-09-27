@@ -2,7 +2,7 @@
 
 本项目基于 [Ghost-Downloader-3](https://github.com/XiaoYouChR/Ghost-Downloader-3) 修改，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-## 0.0.2 - 2026-09-27
+## 0.1.0 - 2026-09-27
 
 ### 新增
 
