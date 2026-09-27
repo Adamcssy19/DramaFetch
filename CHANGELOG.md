@@ -2,6 +2,13 @@
 
 本项目基于 [Ghost-Downloader-3](https://github.com/XiaoYouChR/Ghost-Downloader-3) 修改，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## 0.0.5 - 2026-09-27
+
+### 修复
+
+- 启动更新检查接入镜像加速：raw.githubusercontent.com 不可达时自动改用加速源，不再静默失败导致不弹出更新提示
+- 种子特性包同步改为按内容指纹比较：修复包代码更新后无法同步到已安装用户的问题（0.0.3/0.0.4 短剧入口消失的最终根因）
+
 ## 0.0.4 - 2026-09-27
 
 ### 修复
