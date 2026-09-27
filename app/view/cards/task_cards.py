@@ -207,13 +207,23 @@ class TaskCard(CardWidget):
             self.hBoxLayout.addWidget(getattr(self, f"{spec.name}Button"))
 
     def _bind(self) -> None:
-        self.toggleButton.clicked.connect(self._onToggleClicked)
-        self.verifyHashButton.clicked.connect(self._onVerifyHashClicked)
-        self.openFileButton.clicked.connect(lambda: openFile(self._task.outputPath))
-        self.openFolderButton.clicked.connect(lambda: revealInFolder(self._task.outputPath))
-        self.deleteButton.clicked.connect(self._onDeleteClicked)
+        # 子类可覆盖 buttons 裁剪按钮（如短剧卡片去掉「选择文件」），
+        # 所以只连接实际存在的按钮，不要硬编码属性名 —— 否则 AttributeError。
+        handlers: dict[str, Callable] = {
+            "toggle": self._onToggleClicked,
+            "verifyHash": self._onVerifyHashClicked,
+            "delete": self._onDeleteClicked,
+            "selectFiles": self._onSelectFilesClicked,
+            "openFile": lambda: openFile(self._task.outputPath),
+            "openFolder": lambda: revealInFolder(self._task.outputPath),
+        }
+        for spec in self.buttons:
+            button = getattr(self, f"{spec.name}Button", None)
+            handler = handlers.get(spec.name)
+            if button is not None and handler is not None:
+                button.clicked.connect(handler)
+
         self.checkBox.clicked.connect(lambda checked: self.selectionChanged.emit(checked, False))
-        self.selectFilesButton.clicked.connect(self._onSelectFilesClicked)
         cfg.isCategoryEnabled.valueChanged.connect(self._refreshCategoryIcon)
         self._categoryService.categoriesChanged.connect(self._refreshCategoryIcon)
 

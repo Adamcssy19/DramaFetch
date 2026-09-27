@@ -20,12 +20,26 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 import traceback
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+
+# 每个特性包一个代表性任务，用来真实构造任务卡片。
+# 卡片是在任务列表渲染时才创建的（_refreshViewport → _createCard），CI 上没有
+# 已保存任务就永远不会走到，因此必须在这里喂一个合成任务。
+# 格式：packId -> (task 所在模块, 类名, 任务 URL)
+_CARD_TASKS: dict[str, tuple[str, str, str]] = {
+    "http": ("http_pack.task", "HttpTask", "https://example.com/smoke.bin"),
+    "m3u8": ("m3u8_pack.task", "M3U8Task", "https://example.com/smoke.m3u8"),
+    "drama": (
+        "drama_pack.task", "DramaTask",
+        "drama://hongguo/7683196130645003288?name=%E5%86%92%E7%83%9F%E6%B5%8B%E8%AF%95&eps=1-3",
+    ),
+}
 
 # 必须在导入 PySide6 之前设置：离屏渲染，不弹窗、不需要显示器
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -46,12 +60,12 @@ for path in (str(REPO), str(REPO / "features")):
 def main() -> int:
     try:
         import DramaFetch
-        from app.config.constants import DESKTOP_ID
-        from app.platform.application import SingletonApplication
         from PySide6.QtWidgets import QApplication
 
         DramaFetch.setupEnvironment()
-        app = SingletonApplication(sys.argv[:1], DESKTOP_ID)
+        # 刻意不用 SingletonApplication：单实例锁在有别的实例在跑时（本地开发很常见）
+        # 会让检查直接退出，导致结果依赖环境、随机失败。这里只关心启动与渲染路径。
+        app = QApplication(sys.argv[:1])
 
         from app.startup import createServices, loadEngine, loadPacks
         from app.services.plan import Plan
@@ -82,7 +96,24 @@ def main() -> int:
             QApplication.processEvents()
             created.append(PageClass.__name__)
 
+        # 任务卡片同样是按需构造的，这里逐个包真实建一张卡并 refresh 一遍。
+        cards = []
+        for pack in featureService.packs:
+            spec = _CARD_TASKS.get(pack.packId)
+            if spec is None:
+                continue
+            moduleName, className, url = spec
+            taskCls = getattr(importlib.import_module(moduleName), className)
+            task = taskCls(name="冒烟测试", url=url, packId=pack.packId)
+            card = featureService.taskCard(task)
+            if card is None:
+                raise RuntimeError(f"{pack.packId} 未返回任务卡片实例")
+            card.refresh(force=True)
+            QApplication.processEvents()
+            cards.append(type(card).__name__)
+
         print(f"OK  主窗口创建并显示成功，已实例化页面: {created}")
+        print(f"OK  任务卡片构造成功: {cards}")
         print("✓ 启动冒烟检查通过")
         return 0
     except Exception as err:
