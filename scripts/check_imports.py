@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import ast
 import importlib
 import sys
 import traceback
@@ -28,6 +29,41 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 FEATURES_DIR = REPO / "features"
+STATIC_SCAN_DIRS = ("app", "features", "scripts")
+
+# 终结语句：其后同层级的语句永远执行不到
+_TERMINATORS = (ast.Return, ast.Raise, ast.Break, ast.Continue)
+
+
+def checkUnreachable() -> list[str]:
+    """静态扫描「终结语句之后的不可达代码」。
+
+    0.0.6 事故的第二根因就是这类：往 `MainWindow.__init__` 中间插了一个
+    `@property`（其函数体以 return 结尾），使得 `__init__` 里紧随其后的
+    十几行初始化变成死代码 —— 语法合法、编译通过，直到运行时才炸。
+    """
+    problems: list[str] = []
+    for base in STATIC_SCAN_DIRS:
+        for py in sorted((REPO / base).rglob("*.py")):
+            try:
+                tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
+            except SyntaxError as err:
+                problems.append(f"{py.relative_to(REPO)}: 语法错误 {err}")
+                continue
+            for node in ast.walk(tree):
+                for field in ("body", "orelse", "finalbody"):
+                    block = getattr(node, field, None)
+                    if not isinstance(block, list):
+                        continue
+                    for i, stmt in enumerate(block[:-1]):
+                        if isinstance(stmt, _TERMINATORS):
+                            dead = block[i + 1]
+                            problems.append(
+                                f"{py.relative_to(REPO)}:{dead.lineno}: "
+                                f"{type(stmt).__name__} 之后的语句不可达"
+                            )
+                            break
+    return problems
 
 
 def _packDirs() -> list[Path]:
@@ -66,6 +102,12 @@ def main() -> int:
 
     failures: list[tuple[str, str]] = []
 
+    # 1) 静态：不可达代码
+    for problem in checkUnreachable():
+        failures.append(("不可达代码", problem))
+        print(f"✗ {problem}")
+
+    # 2) 动态：真实导入 + 页面注册
     for packDir in _packDirs():
         for module in _modulesOf(packDir):
             try:

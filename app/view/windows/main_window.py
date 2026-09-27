@@ -85,11 +85,6 @@ class MainWindow(MSFluentWindow):
         super().__init__(parent)
         self._taskService = taskService
         self._featureService = featureService
-
-    @property
-    def taskService(self):
-        """供特性页查询下载记录（如短剧卡片的已下集数）。"""
-        return self._taskService
         self._categoryService = categoryService
         self._coroutineRunner = coroutineRunner
         self._speedMeter = speedMeter
@@ -107,6 +102,11 @@ class MainWindow(MSFluentWindow):
         self._initWidget()
         self._initLayout()
         self._bind()
+
+    @property
+    def taskService(self):
+        """供特性页查询下载记录（如短剧卡片的已下集数）。"""
+        return self._taskService
 
     def _initWidget(self) -> None:
         self.setWindowIcon(QIcon(":/image/logo.png"))
