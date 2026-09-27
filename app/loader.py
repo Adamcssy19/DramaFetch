@@ -49,6 +49,12 @@ def loadPacks(featuresDir: Path, services=None) -> list[FeaturePack]:
         logger.warning("features 目录不存在: {}", featuresDir)
         return []
 
+    # 各 pack 之间的相互引用（如 drama_pack 引用 http_pack）依赖
+    # features 目录可被导入；这里统一注册，避免各处自行插 path
+    featuresStr = str(featuresDir)
+    if featuresStr not in sys.path:
+        sys.path.insert(0, featuresStr)
+
     appVersion = parseVersion(VERSION)
 
     manifests = []

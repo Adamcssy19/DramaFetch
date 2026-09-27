@@ -25,6 +25,8 @@ from .api import (
     detail,
     resolveStream,
 )
+from http_pack.task import HttpTask, HttpTaskStep
+from m3u8_pack.task import M3U8TaskStep
 
 DRAMA_SCHEME = "drama"
 
@@ -96,9 +98,6 @@ async def buildDramaTask(
     subworkerCount: int = 8,
 ) -> DramaTask:
     """解析任务链接：取详情 → 解析每集直链 → 组装多集任务。"""
-    from http_pack.task import HttpTaskStep
-    from m3u8_pack.task import M3U8TaskStep
-
     seriesId, title, picks, category = parseDramaTaskUrl(options_url)
     drama = await detail(seriesId)
     title = title or drama.title or seriesId
@@ -184,9 +183,6 @@ def buildSingleEpisodeTask(
     subworkerCount: int = 8,
 ):
     """单集任务（粘贴播放页链接时用），复用 http_pack 的标准任务。"""
-    from http_pack.task import HttpTask
-    from m3u8_pack.task import M3U8TaskStep
-
     safeName = toSafeFilename(drama.title or "果子短剧", fallback="果子短剧")
     epName = toSafeFilename(
         formatEpisodeTitle(pick, cfg.dramaNameFormat.value, safeName),
