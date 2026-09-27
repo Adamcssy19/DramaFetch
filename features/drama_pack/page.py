@@ -3,7 +3,7 @@ from __future__ import annotations
 """短剧页：搜索 / 分类浏览 → 剧卡片 → 弹选集对话框下载。"""
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP as N, Qt, Signal
-from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from qfluentwidgets import (
@@ -29,10 +29,32 @@ from app.view.components.scroll_area import ScrollArea as PageScrollArea
 from . import api
 from .picker import EpisodePickerDialog
 
-CARD_WIDTH = 260
-COVER_WIDTH, COVER_HEIGHT = 232, 130
+CARD_WIDTH = 210
+COVER_WIDTH, COVER_HEIGHT = 182, 243   # 3:4 竖版海报完整显示
+COVER_RADIUS = 10
+CARD_HEIGHT = 396
 GRID_SPACING = 12
 GRID_MARGIN = 16
+
+
+def _elide(text: str, font, width: int) -> str:
+    """单行省略号截断，超出部分靠 tooltip 展示全文。"""
+    if not text:
+        return ""
+    return QFontMetrics(font).elidedText(text, Qt.TextElideMode.ElideRight, width)
+
+
+def _roundedPixmap(src: QPixmap, radius: int) -> QPixmap:
+    result = QPixmap(src.size())
+    result.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(result)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    path = QPainterPath()
+    path.addRoundedRect(0, 0, src.width(), src.height(), radius, radius)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, src)
+    painter.end()
+    return result
 
 
 class LoadingState(QWidget):
@@ -83,22 +105,29 @@ class DramaCard(CardWidget):
     def __init__(self, drama: api.Drama, parent=None):
         super().__init__(parent)
         self._drama = drama
-        self.setFixedSize(CARD_WIDTH, 290)
+        self.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+        contentWidth = CARD_WIDTH - 28
 
         self._cover = QLabel(self)
         self._cover.setFixedSize(COVER_WIDTH, COVER_HEIGHT)
         self._cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self._title = StrongBodyLabel(drama.title, self)
+        self._title = StrongBodyLabel(self)
+        self._title.setText(_elide(drama.title, self._title.font(), contentWidth))
         self._title.setToolTip(drama.title)
-        self._meta = CaptionLabel(self._metaText(), self)
+
+        self._meta = CaptionLabel(self)
+        meta = self._metaText()
+        self._meta.setText(_elide(meta, self._meta.font(), contentWidth))
+        self._meta.setToolTip(meta)
         self._meta.setTextColor(QColor(120, 120, 120), QColor(170, 170, 170))
-        self._intro = BodyLabel(drama.intro or "", self)
+
+        self._intro = BodyLabel(self)
+        intro = drama.intro or ""
+        self._intro.setText(_elide(intro, self._intro.font(), contentWidth))
         self._intro.setTextColor(QColor(96, 96, 96), QColor(150, 150, 150))
-        self._intro.setWordWrap(True)
-        self._intro.setFixedHeight(40)
-        if drama.intro:
-            self._intro.setToolTip(drama.intro)
+        if intro:
+            self._intro.setToolTip(intro)
 
         self._download = PrimaryPushButton(FluentIcon.DOWNLOAD, "下载", self)
         self._download.setFixedHeight(32)
@@ -115,7 +144,9 @@ class DramaCard(CardWidget):
         layout.addWidget(self._download)
 
     def _metaText(self) -> str:
-        parts = [self._drama.category or "短剧"]
+        parts = [f"ID {self._drama.seriesId}"]
+        if self._drama.category:
+            parts.append(self._drama.category)
         if self._drama.remark:
             parts.append(self._drama.remark)
         elif self._drama.episodeCount:
@@ -126,12 +157,14 @@ class DramaCard(CardWidget):
 
     def setCover(self, data: bytes):
         pixmap = QPixmap()
-        if pixmap.loadFromData(data):
-            self._cover.setPixmap(pixmap.scaled(
-                COVER_WIDTH, COVER_HEIGHT,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            ))
+        if not pixmap.loadFromData(data):
+            return
+        scaled = pixmap.scaled(
+            COVER_WIDTH, COVER_HEIGHT,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self._cover.setPixmap(_roundedPixmap(scaled, COVER_RADIUS))
 
 
 class DramaPage(PackPage, PageScrollArea):
