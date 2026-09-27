@@ -274,10 +274,11 @@ class MainWindow(MSFluentWindow):
         content = self.tr("最新版本: {0}").format(info.latestVersion)
         if info.changelog:
             lines = [line.strip().lstrip("-*• ").strip()
-                     for line in info.changelog.splitlines() if line.strip()]
-            preview = "；".join(line for line in lines[:3] if line)
-            if len(preview) > 100:
-                preview = preview[:100] + "…"
+                     for line in info.changelog.splitlines()
+                     if line.strip() and not line.strip().startswith("#")]
+            preview = "；".join(line for line in lines[:4] if line)
+            if len(preview) > 120:
+                preview = preview[:120] + "…"
             if preview:
                 content += "\n" + preview
 

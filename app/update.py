@@ -10,7 +10,7 @@ APP_REPO = Repo("Adamcssy19/DramaFetch")
 
 
 def extractChangelog(text: str, version: str) -> str:
-    """从 CHANGELOG 内容提取指定版本的段落（到下一个标题为止）。"""
+    """从 CHANGELOG 内容提取指定版本的段落（到下一个同级版本标题为止）。"""
     lines = text.splitlines()
     start = None
     pattern = re.compile(rf"^#+\s+.*?{re.escape(version)}(\s|$)")
@@ -22,7 +22,7 @@ def extractChangelog(text: str, version: str) -> str:
         return ""
     out: list[str] = []
     for line in lines[start:]:
-        if re.match(r"^#+\s", line):
+        if re.match(r"^##\s", line):  # 下一个版本（二级标题）才结束，### 子标题保留
             break
         out.append(line)
     return "\n".join(out).strip()

@@ -114,7 +114,20 @@ jobs:
           # 资产就绪后才创建 Release（含 --latest）：此时客户端检测到更新即可下载
           $tag = "v${{ env.VERSION }}"
           $files = @("dist/DramaFetch-v${{ env.VERSION }}-x64-Setup.exe", "DramaFetch-v${{ env.VERSION }}-Windows-x64.zip")
-          $notes = (Select-String -Path CHANGELOG.md -Pattern "^## $($env:VERSION)\b" -Context 0,20 | Out-String).Trim()
+          # 提取当前版本的更新日志：从 "## 版本号" 到下一个 "## " 为止
+          $changelog = Get-Content CHANGELOG.md
+          $start = -1
+          for ($i = 0; $i -lt $changelog.Count; $i++) {
+            if ($changelog[$i] -match "^## $($env:VERSION)\b") { $start = $i + 1; break }
+          }
+          $noteLines = New-Object System.Collections.Generic.List[string]
+          if ($start -ge 0) {
+            for ($i = $start; $i -lt $changelog.Count; $i++) {
+              if ($changelog[$i] -match "^##\s") { break }
+              $noteLines.Add($changelog[$i])
+            }
+          }
+          $notes = ($noteLines -join "`n").Trim()
           if (gh release view $tag) {
             gh release upload $tag $files --clobber
           } else {
