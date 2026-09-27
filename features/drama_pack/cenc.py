@@ -14,7 +14,7 @@ from base64 import b64decode
 
 from Crypto.Cipher import AES
 
-_CONTAINER = {"moov", "trak", "mdia", "minf", "stbl", "edts", "dinf", "udta", "meta"}
+_CONTAINER = {"moov", "trak", "mdia", "minf", "stbl", "stsd", "edts", "dinf", "udta", "meta"}
 
 
 def hongguoContentKey(value: str) -> bytes:
@@ -80,14 +80,69 @@ def _walk(boxes):
         yield box
 
 
-def _decryptSample(key: bytes, nonce: bytes, cipher: bytes) -> bytes:
-    blocks = (len(cipher) + 15) // 16
-    streamIn = bytearray(16 * blocks)
-    for k in range(blocks):
-        streamIn[k * 16:k * 16 + 8] = nonce[:8]
-        streamIn[k * 16 + 8:k * 16 + 16] = k.to_bytes(8, "big")
-    keystream = AES.new(key, AES.MODE_ECB).encrypt(bytes(streamIn))
-    return bytes(c ^ ks for c, ks in zip(cipher, keystream))
+def _decryptSample(key: bytes, ivSize: int, iv: bytes,
+                   cipher: bytes, subsamples) -> bytes:
+    """单 sample CENC-AES-CTR 解密。
+
+    - ivSize 8：counter block = IV(8) || counter(8, 大端，从 0 累加)
+    - ivSize 16：counter block = IV[0:8] || (IV[8:16] + blockCounter) 大端
+    - subsamples 为 None 表示整段加密；否则按 (clear, encrypted) 子段处理，
+      明文段原样拷贝，加密段做 CTR 异或，block 计数器在子段间连续。
+    """
+    out = bytearray(len(cipher))
+    blockCounter = 0
+    hi = iv[0:8] if ivSize == 16 else b""
+    lo = int.from_bytes(iv[8:16], "big") if ivSize == 16 else 0
+    if not subsamples:
+        subsamples = [(0, len(cipher))]
+
+    pos = 0
+    for clear, enc in subsamples:
+        if clear:
+            out[pos:pos + clear] = cipher[pos:pos + clear]
+            pos += clear
+        if enc:
+            nBlocks = (enc + 15) // 16
+            stream = bytearray(16 * nBlocks)
+            for k in range(nBlocks):
+                if ivSize == 16:
+                    counter = (lo + blockCounter) & 0xFFFFFFFFFFFFFFFF
+                    block = hi + counter.to_bytes(8, "big")
+                else:
+                    block = iv + blockCounter.to_bytes(8, "big")
+                blockCounter += 1
+                stream[k * 16:k * 16 + 16] = block
+            keystream = AES.new(key, AES.MODE_ECB).encrypt(bytes(stream))
+            seg = cipher[pos:pos + enc]
+            out[pos:pos + enc] = bytes(a ^ b for a, b in zip(seg, keystream[:enc]))
+            pos += enc
+    return bytes(out)
+
+
+def _parseSenc(data, box, ivSize) -> list:
+    """解析 senc box：返回逐 sample 条目 [(iv, subsamples_or_None), ...]。"""
+    base = box["off"] + box["hdr"]
+    flags = struct.unpack_from(">I", data, base)[0] & 0x00FFFFFF
+    count = struct.unpack_from(">I", data, base + 4)[0]
+    useSub = bool(flags & 0x02)
+    p = base + 8
+    entries = []
+    for _ in range(count):
+        iv = bytes(data[p:p + ivSize])
+        p += ivSize
+        subs = None
+        if useSub:
+            nSub = struct.unpack_from(">H", data, p)[0]
+            p += 2
+            subs = []
+            for _ in range(nSub):
+                clear = struct.unpack_from(">H", data, p)[0]
+                p += 2
+                encrypted = struct.unpack_from(">I", data, p)[0]
+                p += 4
+                subs.append((clear, encrypted))
+        entries.append((iv, subs))
+    return entries
 
 
 def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
@@ -97,6 +152,13 @@ def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
     moov = next((b for b in top if b["typ"] == "moov"), None)
     if moov is None:
         raise ValueError("MP4 中没有 moov box")
+
+    # 默认 IV 长度：tenc 的 default_IV_size（8 或 16），缺失时按 16 处理
+    ivSize = 16
+    for box in _walk(top):
+        if box["typ"] == "tenc":
+            ivSize = data[box["off"] + box["hdr"] + 5]
+            break
 
     tracks = []
     for stbl in (b for b in _walk(top) if b["typ"] == "stbl"):
@@ -115,11 +177,6 @@ def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
         ns = struct.unpack_from(">I", data, stsc["off"] + 12)[0]
         stscTab = [struct.unpack_from(">III", data, stsc["off"] + 16 + i * 12)
                    for i in range(ns)]
-        ivs = []
-        if senc:
-            sc = struct.unpack_from(">I", data, senc["off"] + 12)[0]
-            ivs = [data[senc["off"] + 16 + i * 8: senc["off"] + 24 + i * 8]
-                   for i in range(sc)]
         chunkSpc = {}
         for i, (first, perChunk, _) in enumerate(stscTab):
             nxt = stscTab[i + 1][0] if i + 1 < len(stscTab) else nc + 1
@@ -134,15 +191,19 @@ def decryptCencMp4(data: bytearray, key: bytes) -> bytes:
                 offs.append(off)
                 off += sizes[si]
                 si += 1
-        tracks.append({"sizes": sizes, "offs": offs, "ivs": ivs})
+        sencEntries = _parseSenc(data, senc, ivSize) if senc else []
+        tracks.append({"sizes": sizes, "offs": offs, "senc": sencEntries})
 
     for track in tracks:
         for i, off in enumerate(track["offs"]):
             size = track["sizes"][i]
-            if off + size > total or i >= len(track["ivs"]):
+            if off + size > total or i >= len(track["senc"]):
+                continue
+            iv, subs = track["senc"][i]
+            if not iv:
                 continue
             data[off:off + size] = _decryptSample(
-                key, track["ivs"][i], data[off:off + size])
+                key, ivSize, iv, data[off:off + size], subs)
 
     def clone(box):
         return {"typ": box["typ"], "off": box["off"], "size": box["size"],
