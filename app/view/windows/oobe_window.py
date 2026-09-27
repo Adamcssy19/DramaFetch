@@ -195,6 +195,30 @@ class PageHeader(QWidget):
         layout.addWidget(descLabel)
 
 
+def _centerRow(widget: QWidget) -> QHBoxLayout:
+    row = QHBoxLayout()
+    row.addStretch(1)
+    row.addWidget(widget)
+    row.addStretch(1)
+    return row
+
+
+def _pageContent(page: QWidget, header: QWidget) -> QVBoxLayout:
+    """OOBE 内容页统一布局：页边距、内容限宽 760 水平居中、标题在上。"""
+    content = QWidget(page)
+    content.setMaximumWidth(760)
+    contentLayout = QVBoxLayout(content)
+    contentLayout.setContentsMargins(0, 0, 0, 0)
+    contentLayout.setSpacing(18)
+    contentLayout.addWidget(header)
+
+    layout = QVBoxLayout(page)
+    layout.setContentsMargins(48, 32, 48, 32)
+    layout.addLayout(_centerRow(content))
+    layout.addStretch(1)
+    return contentLayout
+
+
 class WelcomePage(QWidget):
 
     startClicked = Signal()
@@ -264,25 +288,19 @@ class BasicSettingsPage(QWidget):
         self.browseButton = PushButton(self.tr("浏览..."), self)
 
     def _initLayout(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.header)
-        layout.addStretch(1)
+        contentLayout = _pageContent(self, self.header)
 
         themeRow = QHBoxLayout()
         themeRow.setSpacing(14)
         for card in self._themeCards:
             themeRow.addWidget(card)
-        layout.addLayout(themeRow)
-        layout.addStretch(1)
+        contentLayout.addLayout(themeRow)
 
         self._folderGroup = self.settingsCard.addGroup(
             FluentIcon.FOLDER, self.tr("下载保存位置"),
             str(cfg.downloadFolder.value), self.browseButton,
         )
-        layout.addWidget(self.settingsCard)
-        layout.addStretch(1)
+        contentLayout.addWidget(self.settingsCard)
 
     def _bind(self) -> None:
         for card in self._themeCards:
@@ -327,13 +345,8 @@ class RuntimeInstallPage(QWidget):
         self._card = GroupHeaderCardWidget(self.tr("推荐组件"), self)
 
     def _initLayout(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.header)
-        layout.addStretch(1)
-        layout.addWidget(self._card)
-        layout.addStretch(1)
+        contentLayout = _pageContent(self, self.header)
+        contentLayout.addWidget(self._card)
 
     def mount(self) -> None:
         if self._isMounted:
@@ -424,11 +437,7 @@ class AdvancedOptionsPage(QWidget):
             self.urlSchemeCard = None
 
     def _initLayout(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.header)
-        layout.addStretch(1)
+        contentLayout = _pageContent(self, self.header)
 
         listLayout = QVBoxLayout()
         listLayout.setSpacing(8)
@@ -436,8 +445,7 @@ class AdvancedOptionsPage(QWidget):
                      self.fileAssocCard, self.uriSchemeCard, self.urlSchemeCard]:
             if card is not None:
                 listLayout.addWidget(card)
-        layout.addLayout(listLayout)
-        layout.addStretch(1)
+        contentLayout.addLayout(listLayout)
 
     def save(self) -> None:
         if self.runAtLoginCard.isChecked() != cfg.shouldRunAtLogin.value:
