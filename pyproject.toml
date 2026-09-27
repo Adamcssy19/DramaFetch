@@ -1,6 +1,6 @@
 [project]
 name = "dramafetch"
-version = "0.0.6"
+version = "0.0.7"
 description = "Windows short-drama downloader built on Ghost-Downloader-3."
 readme = "README.md"
 requires-python = ">=3.13"

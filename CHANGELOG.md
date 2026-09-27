@@ -2,6 +2,16 @@
 
 本项目基于 [Ghost-Downloader-3](https://github.com/XiaoYouChR/Ghost-Downloader-3) 修改，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## 0.0.7 - 2026-09-27
+
+### 修复
+
+- **修复 0.0.6 安装后启动即崩溃**（侧边栏「解析」页的导入名写错：`N` 是项目内 `QT_TRANSLATE_NOOP` 的自定义别名，被误当作 PySide6 的导出名导入）。0.0.6 用户安装 0.0.7 即可恢复
+
+### 变更
+
+- 构建流程新增构建前冒烟检查（`scripts/check_imports.py`）：真实导入全部特性包模块并执行 `pages()` / `parsers` 注册，与运行时加载路径一致 —— 杜绝「延迟导入写错 → 编译通过 → 装完打不开」再次流出
+
 ## 0.0.6 - 2026-09-27
 
 ### 新增
