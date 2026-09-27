@@ -137,24 +137,49 @@ async def fetchLatestRelease(repo: Repo) -> Release:
 
 
 
-async def fetchJson(repo: Repo, branch: str, path: str) -> tuple[dict, str]:
-    async def attempt(source):
+# ── GitHub 加速镜像：对 github.com 直链做前缀代理 ──
+
+MIRROR_PREFIXES: dict[str, str] = {
+    "github": "",                          # 官方直连
+    "ghfast": "https://ghfast.top/",
+    "gh-proxy": "https://gh-proxy.com/",
+    "moeyy": "https://github.moeyy.xyz/",
+    "llkk": "https://gh.llkk.cc/",
+}
+
+
+def _rawBaseUrls(repo: Repo, branch: str, path: str) -> list[str]:
+    """raw 文件地址的候选列表：官方源在前，加速镜像兜底。
+
+    raw.githubusercontent.com 在部分网络下不可达，是启动更新检查
+    静默失败的常见原因，因此这里同样接入镜像前缀。
+    """
+    urls: list[str] = []
+    for source in repo.buildSources():
         endpoints = SOURCES[source]
-        url = f"{endpoints.raw}/{repo.nameOn(source)}{endpoints.rawInfix}{branch}/{path}"
+        urls.append(f"{endpoints.raw}/{repo.nameOn(source)}{endpoints.rawInfix}{branch}/{path}")
+    direct = urls[0] if urls else None
+    if direct:
+        urls.extend(prefix + direct for prefix in MIRROR_PREFIXES.values() if prefix)
+    return urls
+
+
+async def fetchJson(repo: Repo, branch: str, path: str) -> tuple[dict, str]:
+    async def attempt(url: str):
         client = buildClient(timeout=15)
         try:
             resp = await client.get(url)
             resp.raise_for_status()
-            result = await resp.json()
-            return result, source
+            return await resp.json(), "github"
         except Exception as e:
-            logger.debug("从 {} 获取 {}/{} 失败: {}", source, repo.name, path, repr(e))
+            logger.debug("获取 {} 失败: {}", url, repr(e))
             raise
         finally:
             client.close()
 
+    candidates = _rawBaseUrls(repo, branch, path)
     result, index, _ = await staggered_race(
-        [lambda s=s: attempt(s) for s in repo.buildSources()], STAGGER_DELAY)
+        [lambda u=u: attempt(u) for u in candidates], STAGGER_DELAY)
     if index is not None:
         return result
     raise TaskError("无法获取 {name}/{branch}/{path}", name=repo.name, branch=branch, path=path)
@@ -164,41 +189,31 @@ async def fetchRawFile(
     repo: Repo, branch: str, path: str, outputPath: Path,
     onProgress: Callable[[float], None] | None = None,
 ) -> str:
-    async def probe(source):
-        endpoints = SOURCES[source]
-        url = f"{endpoints.raw}/{repo.nameOn(source)}{endpoints.rawInfix}{branch}/{path}"
+    async def probe(url: str):
         client = buildClient(headers={"Range": "bytes=0-0"}, timeout=10)
         try:
             resp = await client.get(url)
             try:
                 resp.raise_for_status()
-                return url, source
+                return url
             finally:
                 resp.close()
         except Exception as e:
-            logger.debug("从 {} 下载 {}/{} 失败: {}", source, repo.name, path, repr(e))
+            logger.debug("探测 {} 失败: {}", url, repr(e))
             raise
         finally:
             client.close()
 
+    candidates = _rawBaseUrls(repo, branch, path)
     result, index, _ = await staggered_race(
-        [lambda s=s: probe(s) for s in repo.buildSources()], STAGGER_DELAY)
+        [lambda u=u: probe(u) for u in candidates], STAGGER_DELAY)
     if index is None:
         raise TaskError("无法下载 {name}/{branch}/{path}", name=repo.name, branch=branch, path=path)
-    url, source = result
+    url = result
     await fetchFile(url, outputPath, onProgress=onProgress)
-    return source
+    return "github"
 
 
-# ── GitHub 加速镜像：对 release 资产直链做前缀代理 ──
-
-MIRROR_PREFIXES: dict[str, str] = {
-    "github": "",                          # 官方直连
-    "ghfast": "https://ghfast.top/",
-    "gh-proxy": "https://gh-proxy.com/",
-    "moeyy": "https://github.moeyy.xyz/",
-    "llkk": "https://gh.llkk.cc/",
-}
 MIRROR_LABELS: dict[str, str] = {
     "auto": "自动测速",
     "github": "GitHub 直连",
