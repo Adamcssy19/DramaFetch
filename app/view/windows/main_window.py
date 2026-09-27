@@ -112,6 +112,7 @@ class MainWindow(MSFluentWindow):
         elif sys.platform == "darwin" and cfg.backgroundEffect.value != "None":
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.titleBar.hBoxLayout.insertSpacing(2, 6)
+        self.titleBar.iconLabel.setFixedSize(26, 26)
         if sys.platform == "darwin":
             self.titleBar.hBoxLayout.insertSpacing(0, 60)
 
