@@ -261,9 +261,6 @@ class Config(QConfig):
         "Software", "Geometry", (0, 0, 0, 0), serializer=GeometrySerializer(),
     )
 
-    # OOBE
-    hasCompletedOobe = ConfigItem("Software", "HasCompletedOobe", False, BoolValidator())
-
     # UI 状态
     expandedSettingGroups = ConfigItem("UI", "ExpandedSettingGroups", [], StringListValidator())
     settingGroupOrder = ConfigItem("UI", "SettingGroupOrder", [], StringListValidator())

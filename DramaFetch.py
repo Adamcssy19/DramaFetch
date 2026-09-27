@@ -118,45 +118,20 @@ def startApp(application, isSilent=False):
 
     taskService.taskCompleted.connect(onTaskCompleted)
 
-    shouldRunOobe = not cfg.hasCompletedOobe.value and not isSilent
+    window = MainWindow(taskService, featureService, categoryService, speedMeter, coroutineRunner, plan, updateService)
 
-    if shouldRunOobe:
-        # 首次启动：服务先就绪，主窗口等 OOBE 结束后按最终配置创建
-        from PySide6.QtCore import QEventLoop
-        from app.view.windows.oobe_window import OobeWindow
-
-        startEngine(taskService, speedMeter, featureService, coroutineRunner)
-
-        oobe = OobeWindow(coroutineRunner, featureService, runtimeStatusService)
-        oobe.show()
-
-        loop = QEventLoop()
-        oobe.finished.connect(loop.quit)
-        oobe.destroyed.connect(loop.quit)
-        loop.exec()
-
-        # 必须在主线程显式销毁：闭包连接使窗口陷入循环引用，若留给
-        # Python GC 会在任意工作线程 delete，主线程定时器表悬空 → 闪退
-        oobe.deleteLater()
-
-        window = MainWindow(taskService, featureService, categoryService, speedMeter, coroutineRunner, plan, updateService)
-        window.setupPacks()
+    if not isSilent and sys.platform != "darwin":
+        from qfluentwidgets import SplashScreen
+        splash = SplashScreen(window.windowIcon(), window, enableShadow=False)
+        splash.raise_()
         window.show()
-    else:
-        window = MainWindow(taskService, featureService, categoryService, speedMeter, coroutineRunner, plan, updateService)
+        application.processEvents()
 
-        if not isSilent and sys.platform != "darwin":
-            from qfluentwidgets import SplashScreen
-            splash = SplashScreen(window.windowIcon(), window, enableShadow=False)
-            splash.raise_()
-            window.show()
-            application.processEvents()
+    window.setupPacks()
+    startEngine(taskService, speedMeter, featureService, coroutineRunner)
 
-        window.setupPacks()
-        startEngine(taskService, speedMeter, featureService, coroutineRunner)
-
-        if not isSilent and sys.platform != "darwin":
-            splash.finish()
+    if not isSilent and sys.platform != "darwin":
+        splash.finish()
 
     from app.platform.windows import emptyWorkingSet
 
