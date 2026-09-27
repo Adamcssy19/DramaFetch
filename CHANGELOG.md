@@ -2,6 +2,23 @@
 
 本项目基于 [Ghost-Downloader-3](https://github.com/XiaoYouChR/Ghost-Downloader-3) 修改，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## 0.0.11 - 2026-09-27
+
+### 修复
+
+- **修复下载的视频本地打开黑屏**（下载页能播、导出到别处就黑）。之前那次「CENC 解密修复」只是把加密标记擦掉、样本数据其实没解开，用 ffmpeg 一读就是 `Invalid NAL unit size` / `AAC Reserved bit set`。三个叠加的问题：
+  1. **IV 长度取错**：`tenc` 埋在 `sinf`/`schi` 里，盒子遍历取不到，于是用了兜底值 16，而红果实际是 **8 字节** —— 整条 IV 序列错位，解出来是乱码。改为由 `senc` 自身尺寸反推（`(box size - 头 - 8) / sampleCount`），比读 tenc 更可靠。
+  2. **stco 偏移没生效**：剪掉 `senc`/`saiz`/`saio` 后 moov 变短、mdat 前移约 100KB，但偏移修正写在了 `serialize()` **之后**，新 moov 里仍是旧偏移，播放器从错位处读数据。改为修正后重新序列化（并顺带支持 `co64`）。
+  3. **加密标记没被替换**：`stsd` 会被解析出子节点（样本条目本身是个 box），`serialize` 走了「拼子节点」分支、绕过了补丁，`encv`/`enca`/`sinf`/`tenc` 原样留在产物里 —— 容器仍声明加密，普通播放器直接黑屏。改为有补丁的 box 优先用补丁。
+- 修复后产物是干净的 `hvc1` + `mp4a`，ffmpeg 全片解码零错误，加密标记残留为 0
+
+### 变更
+
+- 新增 `tests/test_cenc_offsets.py`：夹具**独立实现** AES-CTR 与 MP4 组装（不调用被测代码），直接断言「按输出文件自己的样本表读出来的数据 == 原始明文」。之前的自洽式合成测试正是漏掉这些问题的原因
+- 新增 `scripts/dump_cenc_sample.py`：抓一集原始密文供离线验证（加密流 CDN 只认 `novel.snssdk.com` 这个 referer，用果子域名会 403）
+
+> 已完成下载的旧文件无法事后修复（解密是就地覆盖 mdat，且 `senc` 已从 moov 删除、明文不可还原），需重新下载。
+
 ## 0.0.10 - 2026-09-27
 
 ### 修复
