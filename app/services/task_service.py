@@ -191,9 +191,10 @@ class TaskService:
     def add(self, task: Task, autoStart=True) -> None:
         if task.taskId in self._store.tasks:
             return
+        if not self._removeDuplicateDrama(task):
+            self._deduplicateOutput(task)
         task.category, task.outputFolder = self._categoryService.outputFolderOf(task)
         task.shouldSeed = True
-        self._deduplicateOutput(task)
         self._store.add(task)
         self._flushSoon()
         self.taskAdded.emit(task)
@@ -208,6 +209,23 @@ class TaskService:
             except OSError:
                 pass
         self._schedule(task)
+
+    def _removeDuplicateDrama(self, task: Task) -> bool:
+        """同一部剧只保留一条任务条目：重复下载时移除旧条目（保留已下文件），
+        新条目因创建时间最新自然排到列表前面。返回 True 表示是短剧任务。"""
+        from urllib.parse import urlparse
+        if task.packId != "drama" or urlparse(task.url).scheme != "drama":
+            return False
+        seriesId = urlparse(task.url).path.strip("/")
+        if not seriesId:
+            return False
+        for old in list(self._store.tasks.values()):
+            if old.taskId == task.taskId or old.packId != "drama":
+                continue
+            if urlparse(old.url).path.strip("/") == seriesId:
+                logger.info("短剧任务重复，移除旧条目（保留文件）: {}", old.name)
+                self.delete(old, False)
+        return True
 
     def _deduplicateOutput(self, task: Task) -> None:
         storePaths = {t.outputPath for t in self._store.tasks.values()}

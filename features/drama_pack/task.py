@@ -52,11 +52,13 @@ class CencTaskStep(HttpTaskStep):
     cencKey: str = ""
 
     async def run(self, reportSpeed, waitForSpeedLimit) -> None:
+        self.stageText = "下载中"
         await super().run(reportSpeed, waitForSpeedLimit)
         from .cenc import decryptCencMp4
 
-        path = Path(self.outputPath)
+        path = Path(self.outputFile)
         data = bytearray(path.read_bytes())
+        self.stageText = "解密中"
         plain = decryptCencMp4(data, bytes.fromhex(self.cencKey))
         temp = path.with_suffix(path.suffix + ".dec")
         temp.write_bytes(plain)

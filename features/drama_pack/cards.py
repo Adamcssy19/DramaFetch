@@ -2,12 +2,14 @@ from __future__ import annotations
 
 """短剧任务卡片：竖版海报圆角图标 + ID + 已下载集数。"""
 
+import re
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QT_TRANSLATE_NOOP as N
-from PySide6.QtGui import QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QApplication, QHBoxLayout
-from qfluentwidgets import FluentIcon, ToolTipFilter, TransparentToolButton
+from qfluentwidgets import FluentIcon, ToolTipFilter, TransparentToolButton, themeColor
 
 from app.models.task import TaskStatus
 from app.view.cards.task_cards import (
@@ -75,6 +77,7 @@ class DramaTaskCard(TaskCard):
         self.idLabel.setToolTip(self._dramaId())
         self.idLabel.installEventFilter(ToolTipFilter(self.idLabel))
         self.episodeLabel.installEventFilter(ToolTipFilter(self.episodeLabel))
+        self.statusLabel.installEventFilter(ToolTipFilter(self.statusLabel))
 
         # 剧名右侧复制图标（同字号）
         self._titleCopy = _makeCopyButton(self._task.name, self.nameLabel)
@@ -99,6 +102,40 @@ class DramaTaskCard(TaskCard):
             return parseDramaTaskUrl(self._task.url)[0]
         except Exception:
             return ""
+
+    def _episodeNumberOf(self, step) -> int | None:
+        name = Path(getattr(step, "outputFile", "") or "").stem
+        match = re.search(r"(\d+)\s*$", name)
+        if match:
+            return int(match.group(1))
+        fileIndex = getattr(step, "fileIndex", None)
+        return None if fileIndex is None else fileIndex + 1
+
+    def _refreshForStatus(self, task: Task) -> None:
+        super()._refreshForStatus(task)
+        if task.status == TaskStatus.RUNNING:
+            step = next((s for s in task.steps if s.status == TaskStatus.RUNNING), None)
+            if step is None:
+                return
+            stage = (getattr(step, "stageText", "") or "下载中").strip()
+            episode = self._episodeNumberOf(step)
+            text = f"正在下载 第{episode}集 · {stage}" if episode else f"正在下载 · {stage}"
+            if stage == "下载中" and step.progress > 0:
+                text += f" {int(step.progress)}%"
+            self.statusLabel.setTextColor(QColor(themeColor()))
+            self.statusLabel.setText(text)
+            self.statusLabel.show()
+        elif task.status == TaskStatus.COMPLETED and not self._isFileMissing:
+            total = len(task.steps)
+            if total:
+                self.statusLabel.setText(f"全 {total} 集下载完成 🎉")
+                if task.completedAt:
+                    self.statusLabel.setToolTip(datetime.fromtimestamp(task.completedAt)
+                                                .strftime("完成于 %Y-%m-%d %H:%M:%S"))
+        elif task.status == TaskStatus.PAUSED:
+            done = sum(1 for s in task.steps if s.status == TaskStatus.COMPLETED)
+            if len(task.steps):
+                self.statusLabel.setText(f"已暂停 · 已下 {done}/{len(task.steps)} 集")
 
     def refresh(self, force: bool = False) -> None:
         super().refresh(force)
