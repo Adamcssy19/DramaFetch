@@ -19,7 +19,6 @@ from qfluentwidgets import (
     InfoBarPosition,
     PrimaryPushButton,
     PushButton,
-    SearchLineEdit,
     StrongBodyLabel,
     TransparentToolButton,
     ToolTipFilter,
@@ -306,14 +305,7 @@ class DramaPage(PackPage, PageScrollArea):
     # ── 界面搭建 ──
 
     def _initTopBar(self):
-        self._searchBox = SearchLineEdit(self._scrollWidget)
-        self._searchBox.setPlaceholderText("搜索剧名，或粘贴果子分享链接")
-        self._searchBox.setClearButtonEnabled(True)
-        self._searchBox.setFixedWidth(360)
-        self._searchBox.searchSignal.connect(self._onSearch)
-        self._searchBox.returnPressed.connect(
-            lambda: self._onSearch(self._searchBox.text()))
-
+        # 搜索统一走主窗口顶栏搜索框（searchShortDrama），本页不再重复放搜索框
         self._categoryBox = ComboBox(self._scrollWidget)
         for _, name in api.CATEGORY_ROUTES:
             self._categoryBox.addItem(name)
@@ -348,7 +340,6 @@ class DramaPage(PackPage, PageScrollArea):
         topBar = QHBoxLayout()
         topBar.setSpacing(10)
         topBar.addWidget(self._backButton)
-        topBar.addWidget(self._searchBox, 0, Qt.AlignmentFlag.AlignLeft)
         topBar.addStretch(1)
         topBar.addWidget(self._categoryBox)
         return topBar
@@ -541,15 +532,13 @@ class DramaPage(PackPage, PageScrollArea):
     # ── 主窗口顶栏搜索框接入 ──
 
     def searchShortDrama(self, text: str):
-        """主窗口搜索框回车：切到本页并执行搜索。"""
+        """主窗口顶栏搜索框回车：切到本页并执行搜索。"""
         text = (text or "").strip()
         if not text:
             return
-        self._searchBox.setText(text)
         self._onSearch(text)
 
     def _onBackToCategory(self):
-        self._searchBox.clear()
         self._loadCategory(self._route, page=1, categoryName=self._categoryName)
 
     def _downloadFromLink(self, url: str):
@@ -599,7 +588,6 @@ class RankPage(DramaPage):
         super().__init__(pack, parent)
         self.setObjectName("RankPage")
         # 短剧页特有的控件在榜单页一律隐藏
-        self._searchBox.hide()
         self._categoryBox.hide()
         self._backButton.hide()
 

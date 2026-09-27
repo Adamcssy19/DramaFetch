@@ -19,7 +19,11 @@ MACOS_DOCUMENT_TYPES = [
 
 EXCLUDED_PACKS = {"jack_yao"}
 
-EXTRA_INCLUDE_PACKAGES = []
+EXTRA_INCLUDE_PACKAGES = [
+    # 「解析」页去水印解析库：在 parser_api 里是函数内 try/except 动态导入，
+    # 显式声明避免 Nuitka 静态分析漏收（它自己会带回 lxml/parsel/jmespath 等）。
+    "parse_video_py",
+]
 PLATFORM_INCLUDE_PACKAGES = {
     "win32": ["winrt"],
 }
