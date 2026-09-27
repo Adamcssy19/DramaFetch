@@ -2,6 +2,17 @@
 
 本项目基于 [Ghost-Downloader-3](https://github.com/XiaoYouChR/Ghost-Downloader-3) 修改，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## 0.0.8 - 2026-09-27
+
+### 修复
+
+- 修复下载列表里短剧任务卡片报 `AttributeError: 'DramaTaskCard' object has no attribute 'selectFilesButton'`：基类 `TaskCard._bind` 硬编码引用按钮属性，而短剧卡片按设计裁剪掉了「选择文件」按钮。改为只连接实际存在的按钮，与 `draft_cards` 的写法保持一致
+
+### 变更
+
+- 启动冒烟检查补上任务卡片：CI 上没有已保存任务，任务卡片是按需构造的，之前完全没被覆盖。现在会为每个特性包喂一个合成任务并真实建卡 + `refresh()`
+- 启动冒烟检查不再使用 `SingletonApplication`：单实例锁在有别的实例运行时会让检查直接退出，导致结果依赖环境
+
 ## 0.0.7 - 2026-09-27
 
 ### 修复
