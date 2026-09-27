@@ -17,6 +17,7 @@ from app.models.task import Task, TaskFile
 from app.config.cfg import cfg
 from app.platform.filesystem import toSafeFilename
 
+from . import api
 from .api import (
     BASE,
     Drama,
@@ -29,6 +30,7 @@ from http_pack.task import HttpTask, HttpTaskStep
 from m3u8_pack.task import M3U8TaskStep
 
 DRAMA_SCHEME = "drama"
+POSTER_NAME = "poster.jpg"
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,15 @@ class CencTaskStep(HttpTaskStep):
 class DramaTask(Task):
     packId = "drama"
     canEdit = True
+
+    @property
+    def outputPath(self) -> str:
+        """短剧任务的实际产物是「剧文件夹」，而非 outputFolder/name。"""
+        for step in self.steps:
+            outputFile = getattr(step, "outputFile", "")
+            if outputFile:
+                return str(Path(outputFile).parent)
+        return str(Path(self.outputFolder) / self.name)
 
 
 def buildDramaTaskUrl(
@@ -169,6 +180,17 @@ async def buildDramaTask(
     task.files = files
     task.fileSize = 0
     task.__post_init__()
+
+    # 保存剧集海报（供任务列表卡片显示），失败不影响任务
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        posterPath = folder / POSTER_NAME
+        if drama.cover and not posterPath.exists():
+            coverBytes = await api.getBytes(drama.cover)
+            if coverBytes:
+                posterPath.write_bytes(coverBytes)
+    except Exception as e:
+        logger.warning("下载剧集海报失败: {}", e)
 
     if failures:
         logger.warning("短剧 {} 有 {} 集取流失败: {}", title, len(failures), "; ".join(failures[:3]))

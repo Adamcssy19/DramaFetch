@@ -87,6 +87,11 @@ class DramaPack(FeaturePack):
 
     parsers = [DramaParser]
 
+    def taskCardClass(self, task: Task) -> type | None:
+        from .cards import DramaTaskCard
+
+        return DramaTaskCard
+
     def pages(self):
         from .page import DramaPage, RankPage
 
