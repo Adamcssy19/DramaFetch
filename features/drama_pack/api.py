@@ -349,7 +349,7 @@ def _decodeBackupResponse(text: str) -> bytes:
     return plain
 
 
-async def _backupPlayback(seriesId: str, vid: str) -> StreamInfo:
+async def _backupPlayback(seriesId: str, vid: str, quality: int = 0) -> StreamInfo:
     """备用解析接口：第三方代理，返回 CENC 加密流与密钥（果子鉴渠道）。"""
     from base64 import b64encode
 
@@ -382,7 +382,7 @@ async def _backupPlayback(seriesId: str, vid: str) -> StreamInfo:
         if str(flag or "") not in ("", "null", "false", "0", '"0"', '""'):
             raise DramaApiError("备用接口未返回直接媒体地址")
 
-    best: tuple[str, int, str] | None = None
+    options: list[tuple[str, int, str]] = []   # (src, quality, cencKey)
     for option in payload.get("key_urls") or []:
         src = str(option.get("src") or "").strip()
         if not src.startswith("http") or len(src) > 8192:
@@ -393,12 +393,82 @@ async def _backupPlayback(seriesId: str, vid: str) -> StreamInfo:
         except Exception:
             continue
         digits = "".join(ch for ch in str(option.get("name") or "") if ch.isdigit())
-        quality = int(digits) if digits else 0
-        if best is None or quality > best[1]:
-            best = (src, quality, cencKey)
-    if best is None:
+        options.append((src, int(digits) if digits else 0, cencKey))
+    if not options:
         raise DramaApiError("备用接口未返回可用的媒体和密钥")
+    best = pickQualityOption(options, quality)
     return StreamInfo(url=best[0], cencKey=best[2], quality=best[1])
+
+
+def pickQualityOption(options: list[tuple[str, int, str]], quality: int) -> tuple[str, int, str]:
+    """按目标清晰度选最接近的一条（同差距取更高）。quality<=0 表示最高。"""
+    if quality > 0:
+        return min(options, key=lambda o: (abs(o[1] - quality), -o[1]))
+    return max(options, key=lambda o: o[1])
+
+
+def pickQualityStream(streams, quality: int):
+    """按目标清晰度从 AppStream 流列表里选一条。"""
+    if quality > 0:
+        return min(streams, key=lambda s: (abs(s.quality - quality), -s.quality))
+    return max(streams, key=lambda s: s.quality)
+
+
+async def resolveStream(
+    seriesId: str, vid: str, title: str = "", pick: int = 0,
+    channel: str = "auto", quality: int = 0,
+) -> StreamInfo:
+    """解析单集播放地址。channel：auto 依次尝试四条渠道，也可指定 app/web/backup/mirror。"""
+    from .appapi import appVideoModel
+
+    async def viaApp() -> StreamInfo:
+        streams = await appVideoModel(vid)
+        if not streams:
+            raise DramaApiError("App 接口未返回可用清晰度")
+        best = pickQualityStream(streams, quality)
+        return StreamInfo(url=best.url, cencKey=best.cencKey, quality=best.quality)
+
+    async def viaWeb() -> StreamInfo:
+        path = f"/player/{quote(seriesId)}/{quote(vid)}"
+        raw = await _getText(path)
+        page = loaderPage(parseRouterData(raw), "player_(series_id)/(vid)/page", "player_")
+        info = page.get("video_player_info")
+        if not isinstance(info, dict):
+            raise DramaApiError("果子未返回播放数据，该集可能仅允许网页试看")
+        url = str(info.get("main_url") or "")
+        if not url.startswith("http"):
+            raise DramaApiError("该集没有公开的播放地址")
+        return StreamInfo(
+            url=url,
+            width=str(info.get("width") or ""),
+            height=str(info.get("height") or ""),
+            duration=str(info.get("duration") or ""),
+        )
+
+    async def viaBackup() -> StreamInfo:
+        return await _backupPlayback(seriesId, vid, quality)
+
+    async def viaMirror() -> StreamInfo:
+        return await _mirrorResolve(title, pick)
+
+    runners = {
+        "app": ("App源", viaApp),
+        "web": ("官网源", viaWeb),
+        "backup": ("备用源", viaBackup),
+        "mirror": ("镜像站", viaMirror),
+    }
+    order = list(runners)
+    if channel in runners:
+        order = [channel]
+    errors: list[str] = []
+    for name in order:
+        label, runner = runners[name]
+        try:
+            return await runner()
+        except Exception as e:
+            errors.append(f"{label}：{e}")
+            logger.info("{} 取流失败，尝试下一渠道: {}", label, e)
+    raise DramaApiError("全部渠道取流失败（" + "；".join(errors) + "）")
 
 
 async def _mirrorFetch(path: str) -> str:
@@ -464,53 +534,6 @@ async def _mirrorResolve(title: str, pick: int) -> StreamInfo:
         if re.search(r"https?://\S+\.m3u8", url):
             return StreamInfo(url=url, kind="hls")
     raise DramaApiError("镜像站该集没有 m3u8 地址")
-
-
-async def resolveStream(seriesId: str, vid: str, title: str = "", pick: int = 0) -> StreamInfo:
-    """解析单集播放地址，按可用性依次尝试四条渠道。"""
-    from .appapi import appVideoModel
-
-    errors: list[str] = []
-    try:
-        streams = await appVideoModel(vid)
-        best = max(streams, key=lambda s: s.quality)
-        return StreamInfo(url=best.url, cencKey=best.cencKey, quality=best.quality)
-    except Exception as e:
-        errors.append(f"App源：{e}")
-        logger.info("App 接口取流失败，尝试官网网页源: {}", e)
-
-    try:
-        path = f"/player/{quote(seriesId)}/{quote(vid)}"
-        raw = await _getText(path)
-        page = loaderPage(parseRouterData(raw), "player_(series_id)/(vid)/page", "player_")
-        info = page.get("video_player_info")
-        if not isinstance(info, dict):
-            raise DramaApiError("果子未返回播放数据，该集可能仅允许网页试看")
-        url = str(info.get("main_url") or "")
-        if not url.startswith("http"):
-            raise DramaApiError("该集没有公开的播放地址")
-        return StreamInfo(
-            url=url,
-            width=str(info.get("width") or ""),
-            height=str(info.get("height") or ""),
-            duration=str(info.get("duration") or ""),
-        )
-    except Exception as e:
-        errors.append(f"官网源：{e}")
-        logger.info("官网取流失败，尝试备用解析接口: {}", e)
-
-    try:
-        return await _backupPlayback(seriesId, vid)
-    except Exception as e:
-        errors.append(f"备用源：{e}")
-        logger.info("备用接口取流失败，尝试镜像站: {}", e)
-
-    try:
-        return await _mirrorResolve(title, pick)
-    except Exception as e:
-        errors.append(f"镜像站：{e}")
-
-    raise DramaApiError("全部渠道取流失败（" + "；".join(errors) + "）")
 
 
 async def resolveSeriesId(text: str) -> str:

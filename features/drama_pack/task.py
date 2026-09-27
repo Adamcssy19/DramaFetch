@@ -85,15 +85,21 @@ def buildDramaTaskUrl(
     title: str,
     picks: list[int],
     category: str = "",
+    channel: str = "auto",
+    quality: int = 0,
 ) -> str:
     eps = ",".join(str(i) for i in picks) if len(picks) < 400 else "all"
     query = f"name={quote(title)}&eps={quote(eps)}"
     if category:
         query += f"&cat={quote(category)}"
+    if channel and channel != "auto":
+        query += f"&ch={quote(channel)}"
+    if quality:
+        query += f"&q={quality}"
     return f"{DRAMA_SCHEME}://hongguo/{seriesId}?{query}"
 
 
-def parseDramaTaskUrl(url: str) -> tuple[str, str, list[int], str]:
+def parseDramaTaskUrl(url: str) -> tuple[str, str, list[int], str, str, int]:
     parsed = urlparse(url)
     if parsed.scheme != DRAMA_SCHEME or parsed.hostname != "hongguo":
         raise ValueError("不是短剧任务链接")
@@ -101,13 +107,18 @@ def parseDramaTaskUrl(url: str) -> tuple[str, str, list[int], str]:
     query = parse_qs(parsed.query)
     title = unquote((query.get("name") or [""])[0])
     category = unquote((query.get("cat") or [""])[0])
+    channel = (query.get("ch") or ["auto"])[0]
+    try:
+        quality = int((query.get("q") or ["0"])[0])
+    except ValueError:
+        quality = 0
     epsText = unquote((query.get("eps") or ["all"])[0])
     picks: list[int] = []
     for part in epsText.split(","):
         part = part.strip()
         if part.isdigit():
             picks.append(int(part))
-    return seriesId, title, picks, category
+    return seriesId, title, picks, category, channel, quality
 
 
 async def buildDramaTask(
@@ -116,7 +127,7 @@ async def buildDramaTask(
     subworkerCount: int = 8,
 ) -> DramaTask:
     """解析任务链接：取详情 → 解析每集直链 → 组装多集任务。"""
-    seriesId, title, picks, category = parseDramaTaskUrl(options_url)
+    seriesId, title, picks, category, channel, quality = parseDramaTaskUrl(options_url)
     drama = await detail(seriesId)
     title = title or drama.title or seriesId
 
@@ -133,7 +144,8 @@ async def buildDramaTask(
         async with semaphore:
             try:
                 info = await resolveStream(seriesId, drama.vidList[pick - 1],
-                                           title=title, pick=pick)
+                                           title=title, pick=pick,
+                                           channel=channel, quality=quality)
                 return pick, info
             except Exception as e:
                 failures.append(f"第{pick}集：{e}")

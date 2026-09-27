@@ -6,7 +6,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QT_TRANSLATE_NOOP as N
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
-from qfluentwidgets import FluentIcon, ToolTipFilter
+from PySide6.QtWidgets import QApplication, QHBoxLayout
+from qfluentwidgets import FluentIcon, ToolTipFilter, TransparentToolButton
 
 from app.models.task import TaskStatus
 from app.view.cards.task_cards import (
