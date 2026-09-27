@@ -30,6 +30,14 @@ REPO = Path(__file__).resolve().parent.parent
 # 必须在导入 PySide6 之前设置：离屏渲染，不弹窗、不需要显示器
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# Windows（含 CI runner）的 stdout 默认是 cp1252，直接 print 中文会
+# UnicodeEncodeError 而把检查本身搞挂，这里强制 UTF-8。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 for path in (str(REPO), str(REPO / "features")):
     if path not in sys.path:
         sys.path.insert(0, path)

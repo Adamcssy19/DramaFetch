@@ -31,6 +31,14 @@ REPO = Path(__file__).resolve().parent.parent
 FEATURES_DIR = REPO / "features"
 STATIC_SCAN_DIRS = ("app", "features", "scripts")
 
+# Windows（含 CI runner）的 stdout 默认是 cp1252，直接 print 中文/✓ 会
+# UnicodeEncodeError 而把检查本身搞挂，这里强制 UTF-8。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # 终结语句：其后同层级的语句永远执行不到
 _TERMINATORS = (ast.Return, ast.Raise, ast.Break, ast.Continue)
 

@@ -70,9 +70,11 @@ jobs:
 
       - name: Smoke test (imports + startup)
         shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
           # 特性包页面是延迟导入的，py_compile 与 Nuitka 都不会执行导入。
-          # 先验证所有特性包能真实导入，再真实跑一遍启动直到主窗口显示，
+          # 先验证所有特性包能真实导入，再离屏真实跑一遍启动直到主窗口显示，
           # 避免产出「装完打不开」的安装包。
           uv run python scripts/check_imports.py
           uv run python scripts/check_startup.py
