@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import platform
 import shutil
 import subprocess
 import sys
@@ -23,19 +22,12 @@ from app.platform.filesystem import matchChecksum
 from app.models.pack import PackManifest
 from app.models.task import TaskError, toTaskError
 from app.sources import fetchJson, fetchRawFile, fetchReleaseAsset
-from app.update import APP_REPO, isNewer
+from app.update import APP_REPO, buildPlatformKey, isNewer
 
 if TYPE_CHECKING:
     from app.services.coroutine_runner import CoroutineRunner
 
 STAGING_DIR = APP_DATA_DIR / "update_staging"
-
-OS_MAP = {"win32": "Windows", "darwin": "macOS", "linux": "Linux"}
-MACHINE_MAP = {"AMD64": "x86_64", "x86_64": "x86_64", "aarch64": "arm64", "arm64": "arm64"}
-
-
-def buildPlatformKey() -> str:
-    return f"{OS_MAP[sys.platform]}-{MACHINE_MAP[platform.machine()]}"
 
 
 def extractZip(archivePath: Path, targetDir: Path) -> None:

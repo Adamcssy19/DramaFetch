@@ -8,6 +8,20 @@ from app.sources import Release, ReleaseAsset, Repo, fetchLatestRelease, probeDo
 
 APP_REPO = Repo("Adamcssy19/DramaFetch")
 
+# versions.json 里 app.full / app.patches 的平台键，与打包脚本产出命名约定一致
+OS_MAP = {"win32": "Windows", "darwin": "macOS", "linux": "Linux"}
+MACHINE_MAP = {"AMD64": "x86_64", "x86_64": "x86_64", "aarch64": "arm64", "arm64": "arm64"}
+
+
+def platformKeyFor(osName: str, machine: str) -> str:
+    """由系统名/架构名构造平台键，如 ("Windows", "x86_64") → Windows-x86_64。"""
+    return f"{OS_MAP.get(osName, osName)}-{MACHINE_MAP.get(machine, machine)}"
+
+
+def buildPlatformKey() -> str:
+    """当前运行平台的键（供客户端读取 versions.json 使用）。"""
+    return platformKeyFor(sys.platform, platform.machine())
+
 
 def extractChangelog(text: str, version: str) -> str:
     """从 CHANGELOG 内容提取指定版本的段落（到下一个同级版本标题为止）。"""
