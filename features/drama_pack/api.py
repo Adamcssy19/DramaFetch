@@ -59,6 +59,7 @@ class Drama:
     remark: str = ""
     category: str = ""
     vidList: tuple[str, ...] = field(default_factory=tuple)
+    rank: int = 0   # 排行榜名次，0 表示非榜单
 
 
 @dataclass(frozen=True)
@@ -218,9 +219,11 @@ def rankItemToDrama(item: dict) -> Drama | None:
     seriesId = str(item.get("seriesId") or item.get("id") or "")
     if not isNumericId(seriesId):
         return None
+    try:
+        rank = int(item["rank"])
+    except (KeyError, TypeError, ValueError):
+        rank = 0
     remarkParts: list[str] = []
-    if item.get("rank") is not None:
-        remarkParts.append(f"第{item['rank']}名")
     for key in ("heatText", "scoreText"):
         value = str(item.get(key) or "").strip()
         if value:
@@ -233,6 +236,7 @@ def rankItemToDrama(item: dict) -> Drama | None:
         intro=str(item.get("description") or ""),
         remark=" · ".join(remarkParts),
         category="/".join(tags[:3]) if tags else "榜单",
+        rank=rank,
     )
 
 

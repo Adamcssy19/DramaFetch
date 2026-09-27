@@ -2,6 +2,8 @@ from __future__ import annotations
 
 """短剧页：搜索 / 分类浏览 → 剧卡片 → 弹选集对话框下载。"""
 
+from urllib.parse import urlparse
+
 from PySide6.QtCore import QT_TRANSLATE_NOOP as N, Qt, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QApplication, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -24,15 +26,35 @@ from qfluentwidgets import (
 )
 
 from app.models.pack import PackPage
+from app.models.task import TaskStatus
 from app.view.components.scroll_area import ScrollArea as PageScrollArea
 
 from . import api
 from .picker import EpisodePickerDialog
 
+
+# 排行榜前三名配色（金银铜），其余用半透明深色胶囊
+_RANK_COLORS = {
+    1: ("#F6B73C", "#3A2A00"),
+    2: ("#C7CAD1", "#2A2D33"),
+    3: ("#CD7F4A", "#3A1E08"),
+}
+
+
+def _rankBadgeStyle(rank: int) -> str:
+    if rank in _RANK_COLORS:
+        bg, fg = _RANK_COLORS[rank]
+    else:
+        bg, fg = "rgba(0, 0, 0, 0.62)", "#FFFFFF"
+    return (
+        f"QLabel{{background:{bg};color:{fg};border-radius:11px;"
+        f"padding:0 6px;font-weight:700;}}"
+    )
+
 CARD_WIDTH = 210
 COVER_WIDTH, COVER_HEIGHT = 182, 243   # 3:4 竖版海报完整显示
 COVER_RADIUS = 10
-CARD_HEIGHT = 396
+CARD_HEIGHT = 440
 GRID_SPACING = 12
 GRID_MARGIN = 16
 
@@ -114,7 +136,7 @@ class LoadingState(QWidget):
 class DramaCard(CardWidget):
     downloadRequested = Signal(object)
 
-    def __init__(self, drama: api.Drama, parent=None):
+    def __init__(self, drama: api.Drama, parent=None, rank: int = 0, record=None):
         super().__init__(parent)
         self._drama = drama
         self.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
@@ -159,6 +181,11 @@ class DramaCard(CardWidget):
         if intro:
             self._intro.setToolTip(intro)
 
+        # 下载记录行：仅在该剧已存在下载任务时显示
+        self._record = CaptionLabel(self)
+        self._record.setFixedHeight(18)
+        self._record.hide()
+
         self._download = PrimaryPushButton(FluentIcon.DOWNLOAD, "下载", self)
         self._download.setFixedHeight(32)
         self._download.clicked.connect(lambda: self.downloadRequested.emit(self._drama))
@@ -171,8 +198,14 @@ class DramaCard(CardWidget):
         layout.addLayout(idRow)
         layout.addWidget(self._meta)
         layout.addWidget(self._intro)
+        layout.addWidget(self._record)
         layout.addStretch(1)
         layout.addWidget(self._download)
+
+        if rank > 0:
+            self._buildRankBadge(rank)
+        if record is not None:
+            self.setDownloadRecord(record)
 
     def _metaText(self) -> str:
         parts = []
@@ -185,6 +218,46 @@ class DramaCard(CardWidget):
         if self._drama.vidList:
             parts.append(f"可下{len(self._drama.vidList)}集")
         return " · ".join(parts)
+
+    def _buildRankBadge(self, rank: int):
+        badge = QLabel(self._cover)
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        badge.setText(f"第{rank}名")
+        badge.setStyleSheet(_rankBadgeStyle(rank))
+        # 居于海报左上角
+        badge.setGeometry(6, 6, 46, 22)
+        badge.raise_()
+
+    def setDownloadRecord(self, record):
+        """更新下载记录行；record=None 表示无下载记录。"""
+        if record is None:
+            self._record.hide()
+            return
+        total = record.get("total") or 0
+        done = record.get("downloaded") or 0
+        status = record.get("status")
+        try:
+            status = TaskStatus(status)
+        except (TypeError, ValueError):
+            status = None
+        if status is TaskStatus.COMPLETED:
+            text = f"✓ 已下载全部 {total} 集"
+            color = QColor(30, 150, 80)
+        elif status is TaskStatus.RUNNING:
+            text = f"↓ 下载中 {done}/{total} 集"
+            color = QColor(20, 120, 210)
+        elif status is TaskStatus.PAUSED:
+            text = f"⏸ 已暂停 {done}/{total} 集"
+            color = QColor(180, 130, 20)
+        elif status is TaskStatus.WAITING:
+            text = f"⏳ 排队中 {done}/{total} 集"
+            color = QColor(120, 120, 120)
+        else:
+            text = f"已下载 {done}/{total} 集"
+            color = QColor(120, 120, 120)
+        self._record.setText(text)
+        self._record.setTextColor(color, color)
+        self._record.show()
 
     def setCover(self, data: bytes):
         pixmap = QPixmap()
@@ -207,6 +280,9 @@ class DramaPage(PackPage, PageScrollArea):
         self._pack = pack
         self.setObjectName("DramaPage")
         self._cards: list[DramaCard] = []
+        self._bySeries: dict[str, DramaCard] = {}
+        self._taskService = None
+        self._taskSignalsBound = False
         self._route = api.CATEGORY_ROUTES[0][0]
         self._categoryName = api.CATEGORY_ROUTES[0][1]
         self._page = 1
@@ -284,15 +360,60 @@ class DramaPage(PackPage, PageScrollArea):
             self._grid.removeWidget(card)
             card.deleteLater()
         self._cards.clear()
+        self._bySeries.clear()
 
     def _addCards(self, dramas):
         for drama in dramas:
-            card = DramaCard(drama, self._scrollWidget)
+            record = self._recordFor(drama.seriesId)
+            card = DramaCard(drama, self._scrollWidget, rank=drama.rank, record=record)
             card.downloadRequested.connect(self._onDownload)
             self._cards.append(card)
+            self._bySeries[drama.seriesId] = card
             if drama.cover:
                 self._loadCover(card, drama.cover)
+        self._bindTaskSignals()
         self._reflowCards()
+
+    def _ensureTaskService(self):
+        if self._taskService is not None:
+            return self._taskService
+        window = self.window()
+        self._taskService = getattr(window, "taskService", None)
+        return self._taskService
+
+    def _recordFor(self, seriesId: str):
+        """查该 seriesId 是否已有短剧下载任务，返回下载记录或 None。"""
+        svc = self._ensureTaskService()
+        if svc is None:
+            return None
+        for task in svc.tasks:
+            if task.packId != "drama":
+                continue
+            parsed = urlparse(task.url)
+            if parsed.scheme != "drama" or parsed.hostname != "hongguo":
+                continue
+            if parsed.path.strip("/") != seriesId:
+                continue
+            files = task.files or []
+            total = len(files)
+            done = sum(1 for f in files if getattr(f, "completed", False))
+            return {"status": int(task.status), "total": total, "downloaded": done}
+        return None
+
+    def _bindTaskSignals(self):
+        svc = self._ensureTaskService()
+        if svc is None or self._taskSignalsBound or not self._bySeries:
+            return
+        self._taskSignalsBound = True
+        for sig in ("taskAdded", "taskCompleted", "taskPaused",
+                    "taskRemoved", "taskFailed"):
+            signal = getattr(svc, sig, None)
+            if signal is not None:
+                signal.connect(lambda *_: self._refreshRecords())
+
+    def _refreshRecords(self):
+        for seriesId, card in self._bySeries.items():
+            card.setDownloadRecord(self._recordFor(seriesId))
 
     def _reflowCards(self):
         """按可用宽度把卡片重排进网格，窄窗口单列、宽窗口多列。"""
