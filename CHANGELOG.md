@@ -2,6 +2,17 @@
 
 本项目基于 [Ghost-Downloader-3](https://github.com/XiaoYouChR/Ghost-Downloader-3) 修改，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## 0.0.9 - 2026-09-27
+
+### 修复
+
+- **修复「短剧」「排行榜」两页空白**：`_CopyButton` 继承 `TransparentToolButton` 并 override 了 `__init__`，而后者是 `singledispatchmethod`、`(icon, parent)` 分支内部走 `self.__init__(parent)` 回派 —— 子类 override 导致无限递归 `RecursionError`，两个页面的卡片全部创建失败（下载页不用这个控件，所以只有那两页是空白）
+- **修复下载列表卡片剧名不显示**：剧名与复制图标放进同一个 `QHBoxLayout` 时没给剧名拉伸系数，而剧名的水平 `sizePolicy` 是 `Ignored`，宽度被后面的拉伸项吃光，只剩复制图标
+
+### 变更
+
+- 启动冒烟检查补上剧卡片（短剧页 / 排行榜页的渲染单元），并新增「标题宽度为 0」断言：控件构造成功但内容被布局挤没属于隐形问题，只看能否构造是查不出来的
+
 ## 0.0.8 - 2026-09-27
 
 ### 修复
