@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import faulthandler
 import importlib
 import os
 import sys
@@ -27,6 +28,11 @@ import traceback
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+
+# 防护超时：本脚本会真实构造窗口/卡片/对话框，一旦出现无限循环
+# （例如父子关系成环导致 Qt 布局递归）就会永久挂住 —— CI 会一路拖到超时，
+# 什么信息都给不出。超时后 faulthandler 打印各线程堆栈并以非 0 退出。
+WATCHDOG_SECONDS = 180
 
 # 每个特性包一个代表性任务，用来真实构造任务卡片。
 # 卡片是在任务列表渲染时才创建的（_refreshViewport → _createCard），CI 上没有
@@ -58,6 +64,8 @@ for path in (str(REPO), str(REPO / "features")):
 
 
 def main() -> int:
+    faulthandler.enable()
+    faulthandler.dump_traceback_later(WATCHDOG_SECONDS, exit=True)
     try:
         import DramaFetch
         from PySide6.QtWidgets import QApplication
@@ -138,14 +146,42 @@ def main() -> int:
                 raise RuntimeError(f"DramaCard(rank={rank}) 的标题宽度为 0")
             cards.append(f"DramaCard(rank={rank})")
 
+        # 选集对话框：短剧页 / 排行榜页「下载」按钮的落点，同样是按需构造的
+        # （此前整条链路从没被跑过，藏了两个必崩的问题：ScrollArea 父子成环
+        # 导致布局无限递归卡死，以及把 QHBoxLayout 传给了 addWidget）。
+        from drama_pack.picker import EpisodePickerDialog
+
+        window.resize(1280, 800)
+        pickerPack = featureService.packById("drama")
+        if pickerPack is None:
+            raise RuntimeError("未找到 drama 特性包")
+        dialogs = []
+        for total in (20, 300):
+            drama = dramaApi.Drama(
+                seriesId="7683196130645003288", title="冒烟测试剧", cover="",
+                episodeCount=str(total), category="榜单",
+                vidList=tuple(str(i) for i in range(total)),
+            )
+            dialog = EpisodePickerDialog(pickerPack, drama, window)
+            QApplication.processEvents()
+            if len(dialog._episodeButtons) != total:
+                raise RuntimeError(
+                    f"选集对话框按钮数不符：期望 {total} 实得 {len(dialog._episodeButtons)}"
+                )
+            dialogs.append(f"EpisodePickerDialog({total}集)")
+            dialog.deleteLater()
+
         print(f"OK  主窗口创建并显示成功，已实例化页面: {created}")
         print(f"OK  卡片构造成功: {cards}")
+        print(f"OK  对话框构造成功: {dialogs}")
         print("✓ 启动冒烟检查通过")
         return 0
     except Exception as err:
         traceback.print_exc()
         print(f"\n✗ 启动冒烟检查失败: {type(err).__name__}: {err}")
         return 1
+    finally:
+        faulthandler.cancel_dump_traceback_later()
 
 
 if __name__ == "__main__":

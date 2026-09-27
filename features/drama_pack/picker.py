@@ -198,7 +198,10 @@ class EpisodePickerDialog(MessageBoxBase):
             # 第 0 格是「全选」，集数从第 1 列排到第 7 列，之后每行 8 格
             grid.addWidget(button, row, col + 1 if row == 0 else col)
 
-        scroll = ScrollArea(gridHost)
+        # 注意：ScrollArea 的父级**不能**是随后 setWidget 的那个控件，
+        # 否则父子关系成环，Qt 布局会无限递归直接卡死（无异常、无日志）。
+        # 这里先挂在 self 下，稍后由 viewLayout.addWidget 接管。
+        scroll = ScrollArea(self)
         scroll.setWidget(gridHost)
         scroll.setWidgetResizable(True)
         scroll.setFixedHeight(GRID_HEIGHT)
@@ -237,7 +240,7 @@ class EpisodePickerDialog(MessageBoxBase):
         self.yesButton.setText("开始下载")
         self.cancelButton.setText("取消")
 
-        self.viewLayout.addWidget(header)
+        self.viewLayout.addLayout(header)
         self.viewLayout.addSpacing(4)
         self.viewLayout.addWidget(self._edit)
         self.viewLayout.addWidget(self._hintLabel)
