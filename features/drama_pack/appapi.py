@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-"""红果 App 接口客户端：X-Gorgon 签名 + 随机设备身份。
+"""果子 App 接口客户端：X-Gorgon 签名 + 随机设备身份。
 
-签名与设备策略移植自红果鉴（guoapp）的 Go 实现：
+签名与设备策略移植自果子鉴（guoapp）的 Go 实现：
 每次请求对「query 串 + body」做 MD5 混淆生成 X-Gorgon，配合随机生成的
 device_id / iid 绕过设备维度的风控（无签名的裸请求只会得到 200 空响应）。
 """
@@ -95,7 +95,7 @@ def _loadDevice() -> tuple[str, str]:
             json.dumps({"device_id": deviceID, "install_id": installID}),
             encoding="utf-8")
     except Exception as e:
-        logger.debug("红果设备身份保存失败: {}", e)
+        logger.debug("果子设备身份保存失败: {}", e)
     return deviceID, installID
 
 

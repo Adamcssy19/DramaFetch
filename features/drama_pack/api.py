@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""红果短剧网页接口封装。
+"""果子短剧网页接口封装。
 
 全部数据取自 hongguoduanju.com 的服务端渲染页面：页面内嵌一段
 `_ROUTER_DATA = {...}` JSON，解析它即可拿到搜索、分类、详情与播放地址，
@@ -30,7 +30,7 @@ CATEGORY_ROUTES: list[tuple[str, str]] = [
 ]
 
 RANK_ROUTES: list[tuple[str, str]] = [
-    ("hot-drama", "红果热播榜"),
+    ("hot-drama", "果子热播榜"),
     ("hot-real-drama", "真人剧热播榜"),
     ("hot-comic-drama", "漫剧热播榜"),
     ("hot-ai-drama", "AI剧热播榜"),
@@ -83,15 +83,15 @@ async def _getText(path: str, userAgent: str = BROWSER_UA) -> str:
         try:
             status = response.status.as_int()
             if status != 200:
-                raise DramaApiError(f"红果页面返回了异常状态码 {status}")
+                raise DramaApiError(f"果子页面返回了异常状态码 {status}")
             return await response.text()
         finally:
             response.close()
     except DramaApiError:
         raise
     except Exception as e:
-        logger.opt(exception=e).warning("红果页面请求失败 {}", path)
-        raise DramaApiError("红果站点暂时无法访问，请稍后重试") from e
+        logger.opt(exception=e).warning("果子页面请求失败 {}", path)
+        raise DramaApiError("果子站点暂时无法访问，请稍后重试") from e
     finally:
         client.close()
 
@@ -116,11 +116,11 @@ async def getBytes(url: str) -> bytes:
 def parseRouterData(raw: str) -> dict:
     match = re.search(r"_ROUTER_DATA\s*=\s*", raw)
     if not match:
-        raise DramaApiError("红果页面结构已变化，未找到路由数据")
+        raise DramaApiError("果子页面结构已变化，未找到路由数据")
     try:
         data, _ = json.JSONDecoder().raw_decode(raw[match.end():])
     except Exception as e:
-        raise DramaApiError("红果路由数据解析失败，站点可能已改版") from e
+        raise DramaApiError("果子路由数据解析失败，站点可能已改版") from e
     loader = data.get("loaderData")
     return loader if isinstance(loader, dict) else {}
 
@@ -178,7 +178,7 @@ async def search(keyword: str) -> list[Drama]:
     raw = await _getText("/search/" + quote(keyword))
     page = loaderPage(parseRouterData(raw), "search_(keyword)/page", "search_")
     if page.get("isSuccess") is not True:
-        raise DramaApiError("红果搜索暂时不可用，请稍后重试")
+        raise DramaApiError("果子搜索暂时不可用，请稍后重试")
     rows = page.get("searchList") or []
     out: list[Drama] = []
     seen: set[str] = set()
@@ -196,7 +196,7 @@ async def category(route: str, page: int = 1, categoryName: str = "") -> tuple[l
     raw = await _getText(f"/category/{route}?page={max(1, page)}")
     data = loaderPage(parseRouterData(raw), "category_page", "category_")
     if data.get("isSuccess") is False:
-        raise DramaApiError("红果分类数据暂时不可用，请稍后重试")
+        raise DramaApiError("果子分类数据暂时不可用，请稍后重试")
     rows = data.get("recommendList") or []
     out: list[Drama] = []
     seen: set[str] = set()
@@ -288,10 +288,10 @@ async def detail(seriesId: str) -> Drama:
     page = loaderPage(parseRouterData(raw), "detail_page", "detail_")
     info = page.get("seriesDetail")
     if not isinstance(info, dict) or not info:
-        raise DramaApiError("红果未返回该剧详情，可能已下架")
+        raise DramaApiError("果子未返回该剧详情，可能已下架")
     drama = dramaFromAny(info)
     if drama is None:
-        raise DramaApiError("红果详情缺少有效的剧集编号")
+        raise DramaApiError("果子详情缺少有效的剧集编号")
     if not drama.vidList:
         vids = info.get("vid_list") or []
         drama = replace(drama, vidList=tuple(str(v) for v in vids if str(v).strip().isdigit()))
@@ -312,7 +312,7 @@ def _rol8(value: int, n: int) -> int:
 
 
 def _decodeBackupResponse(text: str) -> bytes:
-    """备用解析接口的 v2. 加密响应：掩码派生 AES-CBC 密钥后解密（红果鉴算法）。"""
+    """备用解析接口的 v2. 加密响应：掩码派生 AES-CBC 密钥后解密（果子鉴算法）。"""
     text = text.strip()
     if not text.startswith("v2."):
         return text.encode()
@@ -350,7 +350,7 @@ def _decodeBackupResponse(text: str) -> bytes:
 
 
 async def _backupPlayback(seriesId: str, vid: str) -> StreamInfo:
-    """备用解析接口：第三方代理，返回 CENC 加密流与密钥（红果鉴渠道）。"""
+    """备用解析接口：第三方代理，返回 CENC 加密流与密钥（果子鉴渠道）。"""
     from base64 import b64encode
 
     from .cenc import hongguoContentKey
@@ -485,7 +485,7 @@ async def resolveStream(seriesId: str, vid: str, title: str = "", pick: int = 0)
         page = loaderPage(parseRouterData(raw), "player_(series_id)/(vid)/page", "player_")
         info = page.get("video_player_info")
         if not isinstance(info, dict):
-            raise DramaApiError("红果未返回播放数据，该集可能仅允许网页试看")
+            raise DramaApiError("果子未返回播放数据，该集可能仅允许网页试看")
         url = str(info.get("main_url") or "")
         if not url.startswith("http"):
             raise DramaApiError("该集没有公开的播放地址")
@@ -524,7 +524,7 @@ async def resolveSeriesId(text: str) -> str:
         raise DramaApiError("无法识别的链接或编号")
     parsed = urlparse(text)
     if "hongguoduanju.com" not in parsed.netloc.lower():
-        raise DramaApiError("仅支持红果短剧的分享链接")
+        raise DramaApiError("仅支持果子短剧的分享链接")
     match = re.search(r"/player/(\d+)", parsed.path)
     if match:
         return match.group(1)

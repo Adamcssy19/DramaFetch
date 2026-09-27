@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-"""红果 CENC-AES-CTR 加密 MP4 解密。
+"""果子 CENC-AES-CTR 加密 MP4 解密。
 
-算法移植自 hongguo-downloader（GPL-3.0）与红果鉴（guoapp）：
+算法移植自 hongguo-downloader（GPL-3.0）与果子鉴（guoapp）：
 - spade_a → hongguoContentKey 派生 16 字节 AES 密钥
 - senc box 提供每个 sample 的 8 字节 IV
 - keystream = AES-ECB(key, IV || counter)，与密文异或

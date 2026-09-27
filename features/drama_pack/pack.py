@@ -79,7 +79,7 @@ class DramaParser(TaskParser):
                 subworkerCount=options.subworkerCount,
             )
 
-        raise ValueError("仅支持红果短剧的播放页或详情页链接")
+        raise ValueError("仅支持果子短剧的播放页或详情页链接")
 
 
 class DramaPack(FeaturePack):

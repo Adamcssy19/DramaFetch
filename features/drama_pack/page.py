@@ -167,7 +167,7 @@ class DramaPage(PackPage, PageScrollArea):
 
     def _initTopBar(self):
         self._searchBox = SearchLineEdit(self._scrollWidget)
-        self._searchBox.setPlaceholderText("搜索剧名，或粘贴红果分享链接")
+        self._searchBox.setPlaceholderText("搜索剧名，或粘贴果子分享链接")
         self._searchBox.setClearButtonEnabled(True)
         self._searchBox.setFixedWidth(360)
         self._searchBox.searchSignal.connect(self._onSearch)
@@ -369,7 +369,7 @@ class DramaPage(PackPage, PageScrollArea):
 
     def _downloadFromLink(self, url: str):
         InfoBar.info(
-            "正在解析链接", "已识别红果链接，请到下载页查看任务",
+            "正在解析链接", "已识别果子链接，请到下载页查看任务",
             duration=3000, position=InfoBarPosition.BOTTOM_RIGHT, parent=self.window(),
         )
 

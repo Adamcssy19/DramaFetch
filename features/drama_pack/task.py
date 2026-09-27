@@ -187,7 +187,7 @@ def buildSingleEpisodeTask(
     from http_pack.task import HttpTask
     from m3u8_pack.task import M3U8TaskStep
 
-    safeName = toSafeFilename(drama.title or "红果短剧", fallback="红果短剧")
+    safeName = toSafeFilename(drama.title or "果子短剧", fallback="果子短剧")
     epName = toSafeFilename(
         formatEpisodeTitle(pick, cfg.dramaNameFormat.value, safeName),
         fallback=f"第{pick:03d}集")
