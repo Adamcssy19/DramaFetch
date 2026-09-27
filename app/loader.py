@@ -14,6 +14,18 @@ if TYPE_CHECKING:
     from app.models.pack import FeaturePack
 
 
+def _packFingerprint(packDir: Path) -> str:
+    """pack 目录内容指纹（相对路径 + 文件字节），用于检测代码变化。"""
+    import hashlib
+
+    digest = hashlib.sha256()
+    for f in sorted(packDir.rglob("*")):
+        if f.is_file() and "__pycache__" not in f.parts:
+            digest.update(str(f.relative_to(packDir)).encode())
+            digest.update(f.read_bytes())
+    return digest.hexdigest()
+
+
 def seedPacks(seedDir: Path, targetDir: Path) -> None:
     from app.update import parseVersion
 
@@ -29,13 +41,16 @@ def seedPacks(seedDir: Path, targetDir: Path) -> None:
             continue
 
         target = targetDir / packDir.name
-        userManifest = PackManifest.fromDir(target) if target.exists() else None
 
-        if userManifest is not None and userManifest.version:
-            if parseVersion(userManifest.version) >= parseVersion(seedManifest.version):
-                continue
-
+        # seed 与用户数据同源（均来自安装包），版本号可能长期不变，
+        # 因此以内容指纹为准同步，确保修复代码能到达已安装的用户
         if target.exists():
+            userManifest = PackManifest.fromDir(target)
+            if userManifest is not None and userManifest.version:
+                if parseVersion(userManifest.version) > parseVersion(seedManifest.version):
+                    continue
+                if _packFingerprint(packDir) == _packFingerprint(target):
+                    continue
             shutil.rmtree(target)
         shutil.copytree(packDir, target)
         logger.info("种子 Pack 已同步: {} {}", packDir.name, seedManifest.version)
