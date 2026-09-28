@@ -303,14 +303,18 @@ class DownloadedPage(PackPage, PageScrollArea):
         for task in svc.tasks:
             if getattr(task, "packId", "") != "drama":
                 continue
+            # 只有 drama://hongguo/{seriesId} 才算短剧任务。
+            # 兜底分支必须同样校验 hostname，否则别的 drama 协议任务
+            # （如 drama://other/...）会被误当成一部剧塞进列表。
+            parsed = urlparse(task.url or "")
+            if parsed.scheme != "drama" or parsed.hostname != "hongguo":
+                continue
+            seriesId = parsed.path.strip("/")
+            title = ""
             try:
-                seriesId, title, picks, _cat, _ch, _q = parseDramaTaskUrl(task.url)
+                seriesId, title, _picks, _cat, _ch, _q = parseDramaTaskUrl(task.url)
             except Exception:
-                parsed = urlparse(task.url)
-                if parsed.scheme != "drama":
-                    continue
-                seriesId = parsed.path.strip("/")
-                title = ""
+                pass
             if not seriesId:
                 continue
 

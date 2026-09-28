@@ -176,8 +176,8 @@ class DramaCard(CardWidget):
         titleRow = QHBoxLayout()
         titleRow.setContentsMargins(0, 0, 0, 0)
         titleRow.setSpacing(4)
-        # 标题 sizePolicy 可能被压成 0，必须给 stretch；末尾**不能**再 addStretch，
-        # 否则复制图标会被推到行尾、离标题很远。
+        # 标题给 0 拉伸 + resizeEvent 里按裁剪结果 setFixedWidth，
+        # 复制图标才会紧贴剧名；拉伸项放最后，把右侧空白吃掉。
         titleRow.addWidget(self._title, 0)
         titleRow.addWidget(self._titleCopy, 0)
         titleRow.addStretch(1)
@@ -314,16 +314,15 @@ class DramaCard(CardWidget):
         self._cover.setPixmap(_roundedPixmap(scaled, COVER_RADIUS))
         self._cover.setFixedSize(scaled.width(), scaled.height())
         self._cover.setStyleSheet("")
+        # 海报实际宽度可能小于 POSTER_WIDTH，信息列宽度随之变化，
+        # 而 setFixedSize 不会触发 resizeEvent，这里补一次重算，
+        # 否则标题/简介的省略宽度会按旧值算、偏小或偏大。
+        self._relayoutText()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        # 信息列可用宽度 = 卡片宽 - 海报 - 按钮列 - 各边距/间距。
-        # 不能用 label.width()：这些 label 水平策略是 Ignored/会横跨整列，
-        # 拿它做 elide 等于不裁剪，长文本会一直顶到按钮底下。
+    def _relayoutText(self) -> None:
         available = self._infoWidth()
         if available <= 0:
             return
-        # 标题按裁剪后的实际文字宽度定宽，复制图标才会紧跟剧名而不是飘到行尾
         titleText = _elide(self._drama.title, self._title.font(), max(60, available - 24))
         self._title.setText(titleText)
         self._title.setFixedWidth(max(60, self._title.fontMetrics()
@@ -336,6 +335,13 @@ class DramaCard(CardWidget):
         spacing = self.layout().spacing()
         return max(0, self.width() - margins.left() - margins.right()
                    - self._cover.width() - self._download.width() - spacing * 2)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # 信息列可用宽度 = 卡片宽 - 海报 - 按钮列 - 各边距/间距。
+        # 不能用 label.width()：这些 label 水平策略是 Ignored/会横跨整列，
+        # 拿它做 elide 等于不裁剪，长文本会一直顶到按钮底下。
+        self._relayoutText()
 
 
 class DramaPage(PackPage, PageScrollArea):
