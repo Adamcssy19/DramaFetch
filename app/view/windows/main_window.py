@@ -130,7 +130,8 @@ class MainWindow(MSFluentWindow):
         self._dropOverlay = DropOverlay(self)
 
     def _initLayout(self) -> None:
-        self._addPage(TaskPage, FluentIcon.DOWNLOAD, self.tr("下载任务"),
+        # 第 1 项「下载中」只展示短剧包的任务（一集一集的任务卡片）
+        self._addPage(TaskPage, FluentIcon.DOWNLOAD, self.tr("下载中"),
                       NavigationItemPosition.TOP)
         self._addPage(SettingPage, FluentIcon.SETTING, self.tr("设置"),
                       NavigationItemPosition.BOTTOM)
@@ -180,10 +181,13 @@ class MainWindow(MSFluentWindow):
 
     def _createPage(self, pageClass: type[QWidget]) -> QWidget:
         if pageClass is TaskPage:
-            return TaskPage(
+            page = TaskPage(
                 self._taskService, self._featureService,
                 self._categoryService, self._speedMeter, self._plan, parent=self,
             )
+            # 「下载中」只列短剧任务（一集一集的任务卡片）
+            page.setPackFilter("drama")
+            return page
         if pageClass is SettingPage:
             return SettingPage(
                 self._featureService,

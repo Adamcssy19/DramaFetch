@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QT_TRANSLATE_NOOP as N
+from PySide6.QtCore import Qt, QRectF, QT_TRANSLATE_NOOP as N
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QApplication, QHBoxLayout
 from qfluentwidgets import FluentIcon, ToolTipFilter, TransparentToolButton, themeColor
@@ -18,8 +18,11 @@ from app.view.cards.task_cards import (
 
 from .task import POSTER_NAME, parseDramaTaskUrl
 
-ICON_SIZE = 48
-ICON_RADIUS = 8
+# 卡片图标位：3:4 竖版海报完整显示（不再居中裁剪）
+ICON_WIDTH = 40
+ICON_HEIGHT = 48
+ICON_SIZE = ICON_HEIGHT   # 兼容旧引用
+ICON_RADIUS = 6
 
 
 def _roundedPixmap(src: QPixmap, radius: int) -> QPixmap:
@@ -156,16 +159,30 @@ class DramaTaskCard(TaskCard):
         poster = Path(self._task.outputPath) / (self._task.posterFile or POSTER_NAME)
         pixmap = QPixmap()
         if poster.exists() and pixmap.load(str(poster)):
+            # KeepAspectRatio：整张海报缩放进 40×48 的竖版框内，不裁剪；
+            # 剩余部分用浅灰底补满，视觉上仍是一块圆角海报位。
             scaled = pixmap.scaled(
-                ICON_SIZE, ICON_SIZE,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                ICON_WIDTH, ICON_HEIGHT,
+                Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
-            x = max(0, (scaled.width() - ICON_SIZE) // 2)
-            y = max(0, (scaled.height() - ICON_SIZE) // 2)
-            scaled = scaled.copy(x, y, min(ICON_SIZE, scaled.width()),
-                                 min(ICON_SIZE, scaled.height()))
-            self.iconLabel.setPixmap(_roundedPixmap(scaled, ICON_RADIUS))
-            self.iconLabel.setFixedSize(ICON_SIZE, ICON_SIZE)
+            canvas = QPixmap(ICON_WIDTH, ICON_HEIGHT)
+            canvas.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(canvas)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(128, 128, 128, 38))
+            painter.drawRoundedRect(QRectF(0, 0, ICON_WIDTH, ICON_HEIGHT),
+                                    ICON_RADIUS, ICON_RADIUS)
+            painter.drawPixmap(
+                (ICON_WIDTH - scaled.width()) // 2,
+                (ICON_HEIGHT - scaled.height()) // 2,
+                scaled,
+            )
+            painter.end()
+            self.iconLabel.setPixmap(_roundedPixmap(canvas, ICON_RADIUS))
+            self.iconLabel.setFixedSize(ICON_WIDTH, ICON_HEIGHT)
             return
         super()._refreshIcon()
+        self.iconLabel.setFixedSize(ICON_WIDTH, ICON_HEIGHT)

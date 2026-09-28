@@ -93,10 +93,12 @@ class DramaPack(FeaturePack):
         return DramaTaskCard
 
     def pages(self):
+        from .downloaded_page import DownloadedPage
         from .page import DramaPage, RankPage
         from .parse_page import ParsePage
 
-        return [DramaPage, RankPage, ParsePage]
+        # 顺序即侧边栏顺序：已下载紧随主窗口的「下载中」之后
+        return [DownloadedPage, DramaPage, RankPage, ParsePage]
 
     def optionCards(self, task: Task, parent=None) -> list:
         from app.view.components.option_cards import OutputFolderCard, SubworkerCountCard

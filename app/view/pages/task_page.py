@@ -139,6 +139,7 @@ class TaskPage(QWidget):
         self._plan = plan
         self._filterMode = FilterMode.ALL
         self._categoryFilter = ""
+        self._packFilter = ""
         self._sortField = SortField.CREATED_AT
         self._sortAscending = False
         self._isSelectionMode = False
@@ -341,6 +342,11 @@ class TaskPage(QWidget):
 
     def setCategoryFilter(self, categoryId: str) -> None:
         self._categoryFilter = categoryId
+        self._refreshList()
+
+    def setPackFilter(self, packId: str) -> None:
+        """只展示指定特性包的任务；空字符串表示不过滤。"""
+        self._packFilter = packId or ""
         self._refreshList()
 
     def setSortField(self, field: SortField) -> None:
@@ -596,6 +602,9 @@ class TaskPage(QWidget):
         if self._categoryFilter:
             tasks = [t for t in tasks if t.category == self._categoryFilter]
 
+        if self._packFilter:
+            tasks = [t for t in tasks if getattr(t, "packId", "") == self._packFilter]
+
         if self._sortField == SortField.QUEUE_POSITION:
             waitingIndex = {tid: i for i, tid in enumerate(self._taskService.waitingOrder())}
             running, waiting, rest = [], [], []
@@ -643,6 +652,10 @@ class TaskPage(QWidget):
         else:
             if not self._taskService.tasks:
                 text = self.tr("暂无下载任务")
+            elif self._packFilter:
+                total = sum(1 for t in self._taskService.tasks
+                            if getattr(t, "packId", "") == self._packFilter)
+                text = self.tr("暂无下载任务") if not total else self.tr("当前筛选下暂无任务")
             elif self._categoryFilter:
                 text = self.tr("该分类下暂无任务")
             elif self._filterMode == FilterMode.ACTIVE:

@@ -275,15 +275,12 @@ class EpisodePickerDialog(MessageBoxBase):
         pixmap = QPixmap()
         if not pixmap.loadFromData(data):
             return
+        # KeepAspectRatio：海报按 3:4 完整显示，裁掉边缘会丢失剧名/人物构图
         scaled = pixmap.scaled(
             POSTER_WIDTH, POSTER_HEIGHT,
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
-        x = max(0, (scaled.width() - POSTER_WIDTH) // 2)
-        y = max(0, (scaled.height() - POSTER_HEIGHT) // 2)
-        scaled = scaled.copy(x, y, min(POSTER_WIDTH, scaled.width()),
-                             min(POSTER_HEIGHT, scaled.height()))
         self._posterLabel.setPixmap(_roundedPixmap(scaled, POSTER_RADIUS))
         self._posterLabel.setStyleSheet("")
 

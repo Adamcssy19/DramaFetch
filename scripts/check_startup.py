@@ -128,6 +128,16 @@ def main() -> int:
                 )
             cards.append(type(card).__name__)
 
+        # 「下载中」页必须只展示短剧任务（主窗口注册时 setPackFilter("drama")）
+        taskPage = window._pages.get("TaskPage")
+        if taskPage is None:
+            raise RuntimeError("TaskPage 未在侧边栏创建")
+        if getattr(taskPage, "_packFilter", "") != "drama":
+            raise RuntimeError(
+                "「下载中」页未按 drama 包过滤，"
+                f"实得 {getattr(taskPage, '_packFilter', None)!r}"
+            )
+
         # 剧卡片：短剧页 / 排行榜页的渲染单元，同样是按需构造的。
         from drama_pack import api as dramaApi
         from drama_pack.page import DramaCard
@@ -145,6 +155,37 @@ def main() -> int:
             if card._title.width() <= 0:
                 raise RuntimeError(f"DramaCard(rank={rank}) 的标题宽度为 0")
             cards.append(f"DramaCard(rank={rank})")
+
+        # 已下载页卡片：按剧归纳，海报位是 3:4 竖版（不裁剪）。
+        # 这张卡的构造同样只在页面刷新时才走到，必须显式跑一遍。
+        from drama_pack.downloaded_page import DownloadedCard
+
+        record = {
+            "seriesId": "7683196130645003288", "title": "冒烟测试剧",
+            "status": 4, "total": 3, "downloaded": 3,
+            "folder": "", "posterFile": "",
+        }
+        for status, downloaded in ((4, 3), (2, 1), (3, 0)):
+            variant = dict(record, status=status, downloaded=downloaded)
+            card = DownloadedCard(variant, None)
+            card.resize(card.width(), card.height())
+            card.show()
+            QApplication.processEvents()
+            if card._title.width() <= 0:
+                raise RuntimeError(
+                    f"DownloadedCard(status={status}) 的标题宽度为 0"
+                )
+            cards.append(f"DownloadedCard(status={status})")
+
+        # 已下载页：聚合视图，必须真实构造并刷新一次，
+        # 否则「页面导入得了但一打开就崩」这类问题构建期查不出来。
+        if "DownloadedPage" not in created:
+            raise RuntimeError("未注册 DownloadedPage")
+        page = window._pages.get("DownloadedPage")
+        if page is None:
+            raise RuntimeError("DownloadedPage 未在侧边栏创建")
+        page._refresh()
+        QApplication.processEvents()
 
         # 选集对话框：短剧页 / 排行榜页「下载」按钮的落点，同样是按需构造的
         # （此前整条链路从没被跑过，藏了两个必崩的问题：ScrollArea 父子成环
