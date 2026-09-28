@@ -149,11 +149,22 @@ def main() -> int:
                 vidList=("a", "b", "c"), rank=rank,
             )
             card = DramaCard(drama, None, rank=rank, record=None)
-            card.resize(240, card.height())
+            # 长条卡片按容器宽度横向铺开，给足宽度才有真实的右侧信息区
+            card.resize(1000, card.height())
             card.show()
             QApplication.processEvents()
             if card._title.width() <= 0:
                 raise RuntimeError(f"DramaCard(rank={rank}) 的标题宽度为 0")
+            if card._cover.width() <= 0 or card._cover.height() <= 0:
+                raise RuntimeError(f"DramaCard(rank={rank}) 的海报位尺寸为 0")
+            # 长条样式：海报必须高于宽（3:4 竖版），信息区必须真的拿到宽度
+            if card._cover.height() <= card._cover.width():
+                raise RuntimeError(
+                    f"DramaCard(rank={rank}) 海报不是竖版："
+                    f"{card._cover.width()}x{card._cover.height()}"
+                )
+            if card._infoWidth() <= 0:
+                raise RuntimeError(f"DramaCard(rank={rank}) 信息列宽度为 0")
             cards.append(f"DramaCard(rank={rank})")
 
         # 已下载页卡片：按剧归纳，海报位是 3:4 竖版（不裁剪）。

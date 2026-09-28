@@ -6,7 +6,9 @@ from urllib.parse import urlparse
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP as N, Qt, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import QApplication, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget,
+)
 
 from qfluentwidgets import (
     BodyLabel,
@@ -50,12 +52,18 @@ def _rankBadgeStyle(rank: int) -> str:
         f"padding:0 6px;font-weight:700;}}"
     )
 
-CARD_WIDTH = 210
-COVER_WIDTH, COVER_HEIGHT = 182, 243   # 3:4 竖版海报完整显示
+# 长条卡片：左侧竖版海报 + 右侧信息（与「已下载」页同风格）
+CARD_HEIGHT = 168
+POSTER_WIDTH, POSTER_HEIGHT = 108, 144   # 3:4 竖版海报完整显示，不裁剪
+COVER_WIDTH, COVER_HEIGHT = POSTER_WIDTH, POSTER_HEIGHT
 COVER_RADIUS = 10
-CARD_HEIGHT = 440
-GRID_SPACING = 12
-GRID_MARGIN = 16
+CARD_SPACING = 10
+GRID_MARGIN = 20
+SIDE_PADDING = 20
+
+# 旧名保留：外部（含门禁）仍按 CARD_WIDTH 引用
+CARD_WIDTH = 0
+GRID_SPACING = CARD_SPACING
 
 
 def _elide(text: str, font, width: int) -> str:
@@ -140,27 +148,38 @@ class LoadingState(QWidget):
 
 
 class DramaCard(CardWidget):
+    """长条剧卡片：左侧 3:4 竖版海报，右侧剧名 / ID / 简介 / 记录 + 下载按钮。"""
+
     downloadRequested = Signal(object)
 
     def __init__(self, drama: api.Drama, parent=None, rank: int = 0, record=None):
         super().__init__(parent)
         self._drama = drama
-        self.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
-        contentWidth = CARD_WIDTH - 28
+        self.setFixedHeight(CARD_HEIGHT)
 
         self._cover = QLabel(self)
-        self._cover.setFixedSize(COVER_WIDTH, COVER_HEIGHT)
+        self._cover.setFixedSize(POSTER_WIDTH, POSTER_HEIGHT)
         self._cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._cover.setStyleSheet(
+            f"background-color: rgba(128, 128, 128, 0.14);"
+            f"border-radius: {COVER_RADIUS}px;"
+        )
 
         self._title = StrongBodyLabel(self)
-        self._title.setText(_elide(drama.title, self._title.font(), contentWidth - 22))
+        self._title.setText(drama.title)
         self._title.setToolTip(drama.title)
+        # Ignored：剧名再长也不撑宽卡片，显示由 resizeEvent 里的 _elide 控制。
+        self._title.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                  QSizePolicy.Policy.Preferred)
+        self._title.setMinimumWidth(60)
         self._titleCopy = _copyButton(drama.title, self._title, self)
         titleRow = QHBoxLayout()
         titleRow.setContentsMargins(0, 0, 0, 0)
         titleRow.setSpacing(4)
-        titleRow.addWidget(self._title)
-        titleRow.addWidget(self._titleCopy)
+        # 标题 sizePolicy 可能被压成 0，必须给 stretch；末尾**不能**再 addStretch，
+        # 否则复制图标会被推到行尾、离标题很远。
+        titleRow.addWidget(self._title, 0)
+        titleRow.addWidget(self._titleCopy, 0)
         titleRow.addStretch(1)
 
         self._idLabel = CaptionLabel(self)
@@ -170,22 +189,26 @@ class DramaCard(CardWidget):
         idRow = QHBoxLayout()
         idRow.setContentsMargins(0, 0, 0, 0)
         idRow.setSpacing(4)
-        idRow.addWidget(self._idLabel)
-        idRow.addWidget(self._idCopy)
+        idRow.addWidget(self._idLabel, 0)
+        idRow.addWidget(self._idCopy, 0)
         idRow.addStretch(1)
 
         self._meta = CaptionLabel(self)
         meta = self._metaText()
-        self._meta.setText(_elide(meta, self._meta.font(), contentWidth))
+        self._meta.setText(meta)
         self._meta.setToolTip(meta)
         self._meta.setTextColor(QColor(120, 120, 120), QColor(170, 170, 170))
 
         self._intro = BodyLabel(self)
         intro = drama.intro or ""
-        self._intro.setText(_elide(intro, self._intro.font(), contentWidth))
+        self._intro.setText(intro)
+        self._intro.setToolTip(intro)
+        self._intro.setWordWrap(False)
+        # 水平策略设 Ignored：文本再长也不撑宽卡片（否则超长简介会把整条
+        # 卡片顶到几千像素宽、横向滚动条乱窜），实际显示靠 _elide 裁。
+        self._intro.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                  QSizePolicy.Policy.Preferred)
         self._intro.setTextColor(QColor(96, 96, 96), QColor(150, 150, 150))
-        if intro:
-            self._intro.setToolTip(intro)
 
         # 下载记录行：仅在该剧已存在下载任务时显示
         self._record = CaptionLabel(self)
@@ -194,19 +217,32 @@ class DramaCard(CardWidget):
 
         self._download = PrimaryPushButton(FluentIcon.DOWNLOAD, "下载", self)
         self._download.setFixedHeight(32)
+        self._download.setFixedWidth(96)
         self._download.clicked.connect(lambda: self.downloadRequested.emit(self._drama))
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(6)
-        layout.addWidget(self._cover, 0, Qt.AlignmentFlag.AlignHCenter)
-        layout.addLayout(titleRow)
-        layout.addLayout(idRow)
-        layout.addWidget(self._meta)
-        layout.addWidget(self._intro)
-        layout.addWidget(self._record)
-        layout.addStretch(1)
-        layout.addWidget(self._download)
+        buttonColumn = QVBoxLayout()
+        buttonColumn.setContentsMargins(0, 0, 0, 0)
+        buttonColumn.setSpacing(0)
+        buttonColumn.addStretch(1)
+        buttonColumn.addWidget(self._download)
+        buttonColumn.addStretch(1)
+
+        infoColumn = QVBoxLayout()
+        infoColumn.setContentsMargins(0, 0, 0, 0)
+        infoColumn.setSpacing(5)
+        infoColumn.addLayout(titleRow)
+        infoColumn.addLayout(idRow)
+        infoColumn.addWidget(self._meta)
+        infoColumn.addWidget(self._intro)
+        infoColumn.addWidget(self._record)
+        infoColumn.addStretch(1)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 12, 14, 12)
+        layout.setSpacing(14)
+        layout.addWidget(self._cover, 0, Qt.AlignmentFlag.AlignVCenter)
+        layout.addLayout(infoColumn, 1)
+        layout.addLayout(buttonColumn, 0)
 
         if rank > 0:
             self._buildRankBadge(rank)
@@ -269,12 +305,37 @@ class DramaCard(CardWidget):
         pixmap = QPixmap()
         if not pixmap.loadFromData(data):
             return
+        # KeepAspectRatio：海报完整显示，不裁剪边缘
         scaled = pixmap.scaled(
-            COVER_WIDTH, COVER_HEIGHT,
+            POSTER_WIDTH, POSTER_HEIGHT,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
         self._cover.setPixmap(_roundedPixmap(scaled, COVER_RADIUS))
+        self._cover.setFixedSize(scaled.width(), scaled.height())
+        self._cover.setStyleSheet("")
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # 信息列可用宽度 = 卡片宽 - 海报 - 按钮列 - 各边距/间距。
+        # 不能用 label.width()：这些 label 水平策略是 Ignored/会横跨整列，
+        # 拿它做 elide 等于不裁剪，长文本会一直顶到按钮底下。
+        available = self._infoWidth()
+        if available <= 0:
+            return
+        # 标题按裁剪后的实际文字宽度定宽，复制图标才会紧跟剧名而不是飘到行尾
+        titleText = _elide(self._drama.title, self._title.font(), max(60, available - 24))
+        self._title.setText(titleText)
+        self._title.setFixedWidth(max(60, self._title.fontMetrics()
+                                     .horizontalAdvance(titleText) + 2))
+        if self._drama.intro:
+            self._intro.setText(_elide(self._drama.intro, self._intro.font(), available))
+
+    def _infoWidth(self) -> int:
+        margins = self.layout().contentsMargins()
+        spacing = self.layout().spacing()
+        return max(0, self.width() - margins.left() - margins.right()
+                   - self._cover.width() - self._download.width() - spacing * 2)
 
 
 class DramaPage(PackPage, PageScrollArea):
@@ -297,9 +358,10 @@ class DramaPage(PackPage, PageScrollArea):
 
         self._scrollWidget = QWidget()
         self._layout = QVBoxLayout(self._scrollWidget)
-        self._grid = QGridLayout()
-        self._grid.setSpacing(GRID_SPACING)
-        self._grid.setContentsMargins(0, 0, 0, 0)
+        # 长条卡片一列到底
+        self._list = QVBoxLayout()
+        self._list.setSpacing(CARD_SPACING)
+        self._list.setContentsMargins(0, 0, 0, 0)
         self._state = LoadingState(self._scrollWidget)
 
         self._initTopBar()
@@ -334,7 +396,7 @@ class DramaPage(PackPage, PageScrollArea):
         self._layout.setContentsMargins(GRID_MARGIN, 16, GRID_MARGIN, 16)
         self._layout.addLayout(self._buildTopBar())
         self._layout.addWidget(self._state, 0, Qt.AlignmentFlag.AlignCenter)
-        self._layout.addLayout(self._grid)
+        self._layout.addLayout(self._list)
         self._layout.addWidget(self._moreButton, 0, Qt.AlignmentFlag.AlignHCenter)
         self._layout.addStretch(1)
 
@@ -355,7 +417,7 @@ class DramaPage(PackPage, PageScrollArea):
 
     def _clearCards(self):
         for card in self._cards:
-            self._grid.removeWidget(card)
+            self._list.removeWidget(card)
             card.deleteLater()
         self._cards.clear()
         self._bySeries.clear()
@@ -365,12 +427,12 @@ class DramaPage(PackPage, PageScrollArea):
             record = self._recordFor(drama.seriesId)
             card = DramaCard(drama, self._scrollWidget, rank=drama.rank, record=record)
             card.downloadRequested.connect(self._onDownload)
+            self._list.addWidget(card)
             self._cards.append(card)
             self._bySeries[drama.seriesId] = card
             if drama.cover:
                 self._loadCover(card, drama.cover)
         self._bindTaskSignals()
-        self._reflowCards()
 
     def _ensureTaskService(self):
         if self._taskService is not None:
@@ -412,18 +474,6 @@ class DramaPage(PackPage, PageScrollArea):
     def _refreshRecords(self):
         for seriesId, card in self._bySeries.items():
             card.setDownloadRecord(self._recordFor(seriesId))
-
-    def _reflowCards(self):
-        """按可用宽度把卡片重排进网格，窄窗口单列、宽窗口多列。"""
-        width = self.viewport().width() - GRID_MARGIN * 2 + GRID_SPACING
-        cols = max(1, width // (CARD_WIDTH + GRID_SPACING))
-        for i, card in enumerate(self._cards):
-            self._grid.addWidget(card, i // cols, i % cols)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if hasattr(self, "_grid"):
-            self._reflowCards()
 
     def _loadCover(self, card: DramaCard, url: str):
         def done(data: bytes):
