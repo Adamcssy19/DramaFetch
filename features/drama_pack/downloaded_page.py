@@ -74,6 +74,22 @@ def _elide(text: str, font, width: int) -> str:
     return QFontMetrics(font).elidedText(text, Qt.TextElideMode.ElideRight, width)
 
 
+def _sipDelete(widget) -> None:
+    """立刻释放 Qt 对象的 Python 包装层。
+
+    deleteLater 只是把析构排进事件队列，重新建卡片的循环里旧实例会一直挂着。
+    这里用 sip.delete 主动回收（PySide6 由 shiboken6 提供，缺失时静默降级，
+    不影响功能）。
+    """
+    try:
+        import shiboken6
+
+        if shiboken6.Shiboken.isValid(widget):
+            shiboken6.delete(widget)
+    except Exception:
+        pass
+
+
 class DownloadedCard(CardWidget):
     """一部剧一张卡片：海报 + 剧名 + 「已下载 X/Y 集」+ 打开文件夹。"""
 
@@ -382,7 +398,12 @@ class DownloadedPage(PackPage, PageScrollArea):
     def _clearCards(self):
         for card in self._cards:
             self._grid.removeWidget(card)
+            # setParent(None) 摘离父子树 → deleteLater 排进事件队列回收 Qt 侧 →
+            # _sipDelete 立刻释放 Python 包装对象。少了最后一步，反复刷新 20 次
+            # 后进程里仍堆着 140+ 个 DownloadedCard 实例（存活数只增不减）。
+            card.setParent(None)
             card.deleteLater()
+            _sipDelete(card)
         self._cards.clear()
 
     def _reflowCards(self):
@@ -390,6 +411,9 @@ class DownloadedPage(PackPage, PageScrollArea):
             self._grid.takeAt(0)
         width = self.viewport().width() - GRID_MARGIN * 2 + GRID_SPACING
         cols = max(1, width // (CARD_WIDTH + GRID_SPACING))
+        # 清掉上一次留下的列拉伸，否则残留的拉伸因子会把列宽越挤越歪
+        for column in range(self._grid.columnCount() + 1):
+            self._grid.setColumnStretch(column, 0)
         for i, card in enumerate(self._cards):
             self._grid.addWidget(card, i // cols, i % cols)
         # 末尾留一列弹性空位，卡片左对齐而不是被均匀摊开

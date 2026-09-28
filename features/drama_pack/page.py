@@ -73,6 +73,22 @@ def _elide(text: str, font, width: int) -> str:
     return QFontMetrics(font).elidedText(text, Qt.TextElideMode.ElideRight, width)
 
 
+def _sipDelete(widget) -> None:
+    """立刻释放 Qt 对象的 Python 包装层。
+
+    deleteLater 只是把析构排进事件队列，列表刷新是「清空 + 重建」模式，
+    只靠它旧卡片会一直挂着（实测刷新 20 次后进程级存活实例数仍在上百）。
+    这里用 shiboken6.delete 主动回收；shiboken6 缺失时静默降级，不影响功能。
+    """
+    try:
+        import shiboken6
+
+        if shiboken6.Shiboken.isValid(widget):
+            shiboken6.delete(widget)
+    except Exception:
+        pass
+
+
 def _roundedPixmap(src: QPixmap, radius: int) -> QPixmap:
     result = QPixmap(src.size())
     result.fill(Qt.GlobalColor.transparent)
@@ -424,7 +440,11 @@ class DramaPage(PackPage, PageScrollArea):
     def _clearCards(self):
         for card in self._cards:
             self._list.removeWidget(card)
+            # 摘树 → 排析构 → 立刻回收 Python 包装对象，三步缺一不可。
+            # 只调 deleteLater 时旧卡片会在重建循环里持续堆积（见 _sipDelete 注释）。
+            card.setParent(None)
             card.deleteLater()
+            _sipDelete(card)
         self._cards.clear()
         self._bySeries.clear()
 
